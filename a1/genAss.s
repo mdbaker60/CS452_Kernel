@@ -19,12 +19,12 @@ syscall_enter:
 	msr	cpsr_c, r0
 	mov	ip, sp
 	stmfd	sp!, {r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, ip, lr}
+	mov	r0, ip
 	mrs	r0, cpsr
 	bic	r0, r0, #0x1F
 	orr	r0, r0, #0x13
 	msr	cpsr_c, r0
 	ldr	r3, [lr, #-4]
-	mov	r0, #5
 	ldmfd	sp, {fp, sp, lr}
 	mov	pc, lr
 	.size syscall_enter, .-syscall_enter

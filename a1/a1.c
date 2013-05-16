@@ -31,7 +31,7 @@ int main() {
   struct Task *newTD = Create_sys(0, sub);
   bwprintf(COM2, "task created\r");
   newTD = schedule(newTD);
-  bwprintf(COM2, "task completed\r");
+  bwprintf(COM2, "task completed with value %d\r");
 
   return 0;
 }
