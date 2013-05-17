@@ -15,6 +15,7 @@ getSP:
 schedule:
 	mov	ip, sp
 	stmfd	sp!, {fp, ip, lr}
+	str	r0, [fp, #-
 	mrs	ip, cpsr
 	bic	ip, ip, #0x1F
 	orr	ip, ip, #31
@@ -33,12 +34,14 @@ syscall_enter:
 	msr	cpsr_c, ip
 	mov	ip, sp
 	stmfd	sp!, {r4, r5, r6, r7, r8, r9, r10, r11, ip, lr}
-	mov	sp, r4
+	mov	r4, sp
 	mrs	ip, cpsr
 	bic	ip, ip, #0x1F
 	orr	ip, ip, #0x13
 	msr	cpsr_c, ip
 	ldr	r3, [lr, #-4]
 	ldmfd	sp, {fp, sp, lr}
+	ldr	r2, [fp, #-20]
+	str	r4, [r2]
 	mov	pc, lr
 	.size	syscall_enter, .-syscall_enter

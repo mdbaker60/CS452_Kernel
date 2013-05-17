@@ -6,13 +6,16 @@
 struct Task *Create_sys(int priority, void (*code)());
 struct Task *schedule(struct Task *task);
 void syscall_enter();
+void getNextRequest(struct Task *task);
 
 static int *freeMemStart;
 static int *kernMemStart;
-static struct Task *curTask;
+static struct Task *active;
 
 void sub() {
   bwprintf(COM2, "this is a test\r");
+  Exit();
+  bwprintf(COM2, "this is another test\r");
   Exit();
 }
 
@@ -31,12 +34,18 @@ int main() {
   bwprintf(COM2, "memory setup\r");
 
   //create a test TD
-  struct Task *newTD = Create_sys(0, sub);
+  struct Task *active = Create_sys(0, sub);
   bwprintf(COM2, "task created\r");
-  newTD = schedule(newTD);
-  bwprintf(COM2, "task completed\r");
+  getNextRequest(active);
+  bwprintf(COM2, "back in the kernel\r");
+  getNextRequest(active);
+  bwprintf(COM2, "task complete\r");
 
   return 0;
+}
+
+void getNextRequest(struct Task *task) {
+  schedule(task);
 }
 
 struct Task *Create_sys(int priority, void (*code)()) {
