@@ -2,8 +2,16 @@
 #define __TASK_H__
 
 struct Task {
-  //the saved values of the 16 registers
   int *SP;
+};
+
+struct Request {
+  int ID;
+  int arg1;
+  int arg2;
+  int arg3;
+  int arg4;
+  int arg5;
 };
 
 #endif

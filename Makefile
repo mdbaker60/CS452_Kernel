@@ -9,7 +9,7 @@ LDFLAGS = -init main -Map a1.map -N -T orex.ld -L/u/wbcowan/gnuarm-4.0.2/lib/gcc
 
 all: a1.s a1.elf
 
-a1.s: a1.c include/a1.h
+a1.s: a1.c include/a1.h include/task.h include/syscall.h
 	$(XCC) -S $(CFLAGS) a1.c
 
 a1.o: a1.s syscall.s genAss.s
