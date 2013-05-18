@@ -15,7 +15,6 @@ static struct Task *active;
 static struct Request *activeRequest;
 
 void sub() {
-  bwprintf(COM2, "this is a test\r");
   int myid = MyTid();
   bwprintf(COM2, "My ID is %d\r", myid);
   Exit();
@@ -36,15 +35,25 @@ int main() {
 
   //create a test TD
   active = Create_sys(0, sub);
+  struct Task *second = Create_sys(0, sub);
   kernMemStart -= sizeof(struct Request);
   activeRequest = (struct Request *)kernMemStart;
-  activeRequest->ID = 0;
-  activeRequest->arg1 = 0;
-  activeRequest->arg2 = 0;
-  bwprintf(COM2, "task %d created\r", active->ID);
 
   getNextRequest(active, activeRequest);
   handle(activeRequest);
+  struct Task *temp = active;
+  active = second;
+  second = temp;
+  getNextRequest(active, activeRequest);
+  handle(activeRequest);
+  temp = active;
+  active = second;
+  second = temp;
+  getNextRequest(active, activeRequest);
+  handle(activeRequest);
+  temp = active;
+  active = second;
+  second = temp;
   getNextRequest(active, activeRequest);
   handle(activeRequest);
 
@@ -72,10 +81,8 @@ struct Task *Create_sys(int priority, void (*code)()) {
 void handle(struct Request *request) {
   switch(request->ID) {
     case 0:
-      bwprintf(COM2, "Exit called by task %d\r", active->ID);
       break;
     case 1:
-      bwprintf(COM2, "MyTid called by task %d\r", active->ID);
       *(active->SP) = active->ID;
       break;
   }
