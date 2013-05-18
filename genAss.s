@@ -15,13 +15,15 @@ getSP:
 schedule:
 	mov	ip, sp
 	stmfd	sp!, {fp, ip, lr}
-	str	r0, [fp, #-
+	sub	fp, ip, #4
+	sub	sp, sp, #4
+	str	r0, [fp, #-12]
 	mrs	ip, cpsr
 	bic	ip, ip, #0x1F
 	orr	ip, ip, #31
 	msr	cpsr_c, ip
 	ldr	sp, [r0]
-	ldmfd	sp, {r4, r5, r6, r7, r8, r9, r10, r11, sp, lr}
+	ldmfd	sp, {r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, sp, lr}
 	movs	pc, lr
 	.size	schedule, .-schedule
 	.align	2
@@ -33,15 +35,14 @@ syscall_enter:
 	orr	ip, ip, #31
 	msr	cpsr_c, ip
 	mov	ip, sp
-	stmfd	sp!, {r4, r5, r6, r7, r8, r9, r10, r11, ip, lr}
-	mov	r4, sp
+	stmfd	sp!, {r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, ip, lr}
+	mov	r0, sp
 	mrs	ip, cpsr
 	bic	ip, ip, #0x1F
 	orr	ip, ip, #0x13
 	msr	cpsr_c, ip
 	ldr	r3, [lr, #-4]
-	ldmfd	sp, {fp, sp, lr}
-	ldr	r2, [fp, #-20]
-	str	r4, [r2]
+	ldmfd	sp, {r1, fp, sp, lr}
+	str	r0, [r1]
 	mov	pc, lr
 	.size	syscall_enter, .-syscall_enter
