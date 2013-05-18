@@ -4,11 +4,9 @@
 #include <syscall.h>
 
 struct Task *Create_sys(int priority, void (*code)());
-//void schedule(struct Task *task, struct Request *request);
-void schedule(struct Task *task);
+void schedule(struct Task *task, struct Request *request);
 void syscall_enter();
-//void getNextRequest(struct Task *task, struct Request *request);
-void getNextRequest(struct Task *task);
+void getNextRequest(struct Task *task, struct Request *request);
 
 static int *freeMemStart;
 static int *kernMemStart;
@@ -17,7 +15,7 @@ static struct Request *activeRequest;
 
 void sub() {
   bwprintf(COM2, "this is a test\r");
-  Exit();
+  syscall();
   bwprintf(COM2, "this is another test\r");
   Exit();
 }
@@ -37,21 +35,21 @@ int main() {
 
   //create a test TD
   active = Create_sys(0, sub);
-  //kernMemStart -= sizeof(struct Request);
-  //activeRequest = (struct Request *)kernMemStart;
-  //activeRequest->ID = 0;
+  kernMemStart -= sizeof(struct Request);
+  activeRequest = (struct Request *)kernMemStart;
+  activeRequest->ID = 0;
 
-  bwprintf(COM2, "task created\r");
-  getNextRequest(active);
-  bwprintf(COM2, "back in the kernel\r");
-  getNextRequest(active);
-  bwprintf(COM2, "task complete\r");
+  bwprintf(COM2, "task created with syscode %d\r", activeRequest->ID);
+  getNextRequest(active, activeRequest);
+  bwprintf(COM2, "back in the kernel with syscode %d\r", activeRequest->ID);
+  getNextRequest(active, activeRequest);
+  bwprintf(COM2, "task complete wit syscode %d\r", activeRequest->ID);
 
   return 0;
 }
 
-void getNextRequest(struct Task *task) {
-  schedule(task);
+void getNextRequest(struct Task *task, struct Request *request) {
+  schedule(task, request);
 }
 
 struct Task *Create_sys(int priority, void (*code)()) {

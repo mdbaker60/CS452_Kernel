@@ -11,10 +11,7 @@ getSP:
 	.type	schedule, %function
 schedule:
 	mov	ip, sp
-	stmfd	sp!, {fp, ip, lr}
-	sub	fp, ip, #4
-	sub	sp, sp, #4
-	str	r0, [fp, #-12]
+	stmfd	sp!, {r0, r1, fp, ip, lr}
 	mrs	ip, cpsr
 	bic	ip, ip, #0x1F
 	orr	ip, ip, #31
@@ -39,7 +36,9 @@ syscall_enter:
 	orr	ip, ip, #0x13
 	msr	cpsr_c, ip
 	ldr	r3, [lr, #-4]
-	ldmfd	sp, {r0, fp, sp, lr}
+	and	r3, r3, #0xFF
+	ldmfd	sp, {r0, r1, fp, sp, lr}
 	str	r2, [r0]
+	str	r3, [r1]
 	mov	pc, lr
 	.size	syscall_enter, .-syscall_enter
