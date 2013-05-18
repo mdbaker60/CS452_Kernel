@@ -17,6 +17,8 @@ schedule:
 	orr	ip, ip, #31
 	msr	cpsr_c, ip
 	ldr	sp, [r0]
+	ldr	ip, [r0, #4]
+	msr	spsr, ip
 	ldmfd	sp, {r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, sp, lr}
 	movs	pc, lr
 	.size	schedule, .-schedule
@@ -36,9 +38,19 @@ syscall_enter:
 	orr	ip, ip, #0x13
 	msr	cpsr_c, ip
 	ldr	r3, [lr, #-4]
-	and	r3, r3, #0xFF
 	ldmfd	sp, {r0, r1, fp, sp, lr}
 	str	r2, [r0]
-	str	r3, [r1]
+	mrs	ip, spsr
+	str	ip, [r0, #4]
+	and	ip, r3, #0xFF
+	str	ip, [r1]
+	and	ip, r3, #0x100
+	teq	ip, #0x100
+	ldreq	r0, [r2]
+	streq	r0, [r1, #4]
+	and	ip, r3, #0x200
+	teq	ip, #0x200
+	ldreq	r0, [r2, #4]
+	streq	r0, [r1, #8]
 	mov	pc, lr
 	.size	syscall_enter, .-syscall_enter

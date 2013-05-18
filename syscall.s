@@ -3,11 +3,11 @@
 	.global	Exit
 	.type	Exit, %function
 Exit:
-	swi	#0
+	swi	#0x0
 	.size	Exit, .-Exit
 	.align	2
-	.global	syscall
-	.type	syscall, %function
-syscall:
-	swi	#1
-	.size	syscall, .-syscall
+	.global	MyTid
+	.type	MyTid, %function
+MyTid:
+	swi	#0x1
+	.size	MyTid, .-MyTid

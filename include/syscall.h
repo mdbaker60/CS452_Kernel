@@ -2,5 +2,6 @@
 #define __SYSCALL_H__
 
 void Exit();
+int MyTid();
 
 #endif
