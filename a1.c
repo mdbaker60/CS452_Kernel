@@ -3,16 +3,12 @@
 #include <task.h>
 #include <syscall.h>
 
-struct Task *Create_sys(int priority, void (*code)());
-void schedule(struct Task *task, struct Request *request);
-void syscall_enter();
-void getNextRequest(struct Task *task, struct Request *request);
-
 static int *freeMemStart;
 static int *kernMemStart;
-static int nextTID;
+static int nextTID = 3;
 static struct Task *active;
 static struct Request *activeRequest;
+static struct Queue *readyQueue;
 
 void sub() {
   int myid = MyTid();
@@ -24,22 +20,32 @@ void handle(struct Request *request);
 
 int main() {
   *((int *)0x28) = (int)syscall_enter;
-  nextTID = 0;
 
   kernMemStart = getSP();
   //leave 1KB of stack space for function calls
   kernMemStart -= 0x400;
-
   //Leave 1KB of space for kernel variables
   freeMemStart = kernMemStart - 0x400;
 
-  //create a test TD
-  active = Create_sys(0, sub);
-  struct Task *second = Create_sys(0, sub);
+  //initialize the readyQueue
+  kernMemStart -= sizeof(struct Queue);
+  readyQueue = (struct Queue *)kernMemStart;
+  init(readyQueue);
+
+  //initialize the active request structure
   kernMemStart -= sizeof(struct Request);
   activeRequest = (struct Request *)kernMemStart;
 
-  getNextRequest(active, activeRequest);
+  //create a test TD
+  active = Create_sys(0, sub);
+  enqueue((int *)Create_sys(0, sub), readyQueue);
+  while(active != NULL) {
+    getNextRequest(active, activeRequest);
+    handle(activeRequest);
+  }
+  //struct Task *second = Create_sys(0, sub);
+
+  /*getNextRequest(active, activeRequest);
   handle(activeRequest);
   struct Task *temp = active;
   active = second;
@@ -55,13 +61,9 @@ int main() {
   active = second;
   second = temp;
   getNextRequest(active, activeRequest);
-  handle(activeRequest);
+  handle(activeRequest);*/
 
   return 0;
-}
-
-void getNextRequest(struct Task *task, struct Request *request) {
-  schedule(task, request);
 }
 
 struct Task *Create_sys(int priority, void (*code)()) {
@@ -80,10 +82,13 @@ struct Task *Create_sys(int priority, void (*code)()) {
 
 void handle(struct Request *request) {
   switch(request->ID) {
-    case 0:
+    case 0:				//Exit
+      active = (struct Task *)dequeue(readyQueue);
       break;
-    case 1:
+    case 1:				//MyTid
       *(active->SP) = active->ID;
+      enqueue((int *)active, readyQueue);
+      active = (struct Task *)dequeue(readyQueue);
       break;
   }
 }
