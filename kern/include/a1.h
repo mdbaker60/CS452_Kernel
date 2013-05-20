@@ -8,6 +8,7 @@ int *getSP();
 struct Task *Create_sys(int priority, void (*code)());
 void syscall_enter();
 void getNextRequest(struct Task *task, struct Request *request);
+void handle(struct Request *request);
 
 //tempory queue structure
 //will not use in final version

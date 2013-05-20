@@ -2,6 +2,7 @@
 #include <bwio.h>
 #include <task.h>
 #include <syscall.h>
+#include <userTasks.h>
 
 static int *freeMemStart;
 static int *kernMemStart;
@@ -9,25 +10,6 @@ static int nextTID;
 static struct Task *active;
 static struct Request *activeRequest;
 static struct Queue *readyQueue;
-
-void child() {
-  int myid = MyTid();
-  int parentid = MyParentTid();
-  bwprintf(COM2, "My id is %d and my parent's id is %d\r", myid, parentid);
-  Exit();
-}
-
-void sub() {
-  int myid = MyTid();
-  int child1 = Create(0, child);
-  Pass();
-  Pass();
-  int child2 = Create(0, child);
-  bwprintf(COM2, "My ID is %d and my children's are %d and %d\r", myid, child1, child2);
-  Exit();
-}
-
-void handle(struct Request *request);
 
 int main() {
   *((int *)0x28) = (int)syscall_enter;
@@ -50,7 +32,7 @@ int main() {
 
   //create a test TD
   active = NULL;
-  active = Create_sys(0, sub);
+  active = Create_sys(1, firstTask);
   while(active != NULL) {
     getNextRequest(active, activeRequest);
     handle(activeRequest);
