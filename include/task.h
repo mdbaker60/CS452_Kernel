@@ -5,6 +5,7 @@ struct Task {
   int *SP;
   int SPSR;
   int ID;
+  struct Task *parent;
 };
 
 struct Request {

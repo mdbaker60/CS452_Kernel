@@ -3,7 +3,7 @@
 	.global	Create
 	.type	Create, %function
 Create:
-	swi	#300
+	swi	#0x300
 	.size	Create, .-Create
 	.align	2
 	.global	MyTid
@@ -21,6 +21,7 @@ MyParentTid:
 	.global	Pass
 	.type	Pass, %function
 Pass:
+	swi	#0x3
 	.size	Pass, .-Pass
 	.align	2
 	.global	Exit
