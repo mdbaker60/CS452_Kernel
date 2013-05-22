@@ -47,9 +47,10 @@ struct Task *Create_sys(int priority, void (*code)()) {
   //initialize user task context
   newTD->SP = freeMemStart-56;		//loaded during user task schedule
   newTD->ID = nextTID++;
+  newTD->SPSR = 0xD0;
   newTD->parent = active;
+  newTD->returnAddress = (int)code;
   *(newTD->SP + 12) = (int)freeMemStart;	//stack pointer
-  *(newTD->SP + 13) = (int)code;		//link register
 
   freeMemStart -= 0x400;	//give each task 1KB of stack space
 

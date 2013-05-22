@@ -12,14 +12,19 @@ getSP:
 getNextRequest:
 	mov	ip, sp
 	stmfd	sp!, {r0, r1, fp, ip, lr}
+	ldr	ip, [r0, #4]
+	msr	spsr, ip
+	ldr	lr, [r0, #8]
 	mrs	ip, cpsr
 	bic	ip, ip, #0x1F
 	orr	ip, ip, #31
 	msr	cpsr_c, ip
 	ldr	sp, [r0]
-	ldr	ip, [r0, #4]
-	msr	spsr, ip
 	ldmfd	sp, {r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, sp, lr}
+	mrs	ip, cpsr
+	bic	ip, ip, #0x1F
+	orr	ip, ip, #0x13
+	msr	cpsr_c, ip
 	movs	pc, lr
 	.size	getNextRequest, .-getNextRequest
 	.align	2
@@ -37,11 +42,14 @@ syscall_enter:
 	bic	ip, ip, #0x1F
 	orr	ip, ip, #0x13
 	msr	cpsr_c, ip
-	ldr	r3, [lr, #-4]
+	mov	r3, lr
 	ldmfd	sp, {r0, r1, fp, sp, lr}
 	str	r2, [r0]
 	mrs	ip, spsr
 	str	ip, [r0, #4]
+	str	r3, [r0, #8]
+	mov	ip, r3
+	ldr	r3, [ip, #-4]
 	and	ip, r3, #0xFF
 	str	ip, [r1]
 	and	ip, r3, #0x100
