@@ -14,7 +14,7 @@ static struct Queue *readyQueue;
 int main() {
   *((int *)0x28) = (int)syscall_enter;
   nextTID = 0;
-
+ /* 
   kernMemStart = getSP();
   //leave 1KB of stack space for function calls
   kernMemStart -= 0x400;
@@ -29,7 +29,7 @@ int main() {
   //initialize the active request structure
   kernMemStart -= sizeof(struct Request);
   activeRequest = (struct Request *)kernMemStart;
-
+*/
   //create a test TD
   active = NULL;
   active = Create_sys(1, firstTask);
