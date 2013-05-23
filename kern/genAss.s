@@ -48,7 +48,6 @@ syscall_enter:
 	mrs	ip, spsr
 	str	ip, [r0, #4]
 	str	r3, [r0, #8]
-	mov	ip, r3
 	ldr	r3, [r3, #-4]
 	and	ip, r3, #0xFF
 	str	ip, [r1]
