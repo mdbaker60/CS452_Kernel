@@ -1,12 +1,17 @@
 #ifndef __TASK_H__
 #define __TASK_H__
 
+enum State {READY, ACTIVE, ZOMBIE};
+
 struct Task {
   int *SP;
   int SPSR;
   int returnAddress;
   int ID;
-  struct Task *parent;
+  int parentID;
+  struct Task *next;
+  enum State state;
+  int priority;
 };
 
 struct Request {
