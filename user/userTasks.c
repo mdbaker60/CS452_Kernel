@@ -11,13 +11,13 @@ void otherTask() {
 }
 
 void firstTask() {
-  int childid = Create(2, otherTask);
+  int childid = Create(0, otherTask);
+  bwprintf(COM2, "Created: %d.\r", childid);
+  childid = Create(0, otherTask);
   bwprintf(COM2, "Created: %d.\r", childid);
   childid = Create(2, otherTask);
   bwprintf(COM2, "Created: %d.\r", childid);
-  childid = Create(0, otherTask);
-  bwprintf(COM2, "Created: %d.\r", childid);
-  childid = Create(0, otherTask);
+  childid = Create(2, otherTask);
   bwprintf(COM2, "Created: %d.\r", childid);
   bwprintf(COM2, "First: exiting\r");
   Exit();

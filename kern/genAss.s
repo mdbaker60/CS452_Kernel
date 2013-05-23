@@ -20,7 +20,7 @@ getNextRequest:
 	orr	ip, ip, #31
 	msr	cpsr_c, ip
 	ldr	sp, [r0]
-	ldmfd	sp, {r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, sp, lr}
+	ldmfd	sp, {r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, fp, sp, lr}
 	mrs	ip, cpsr
 	bic	ip, ip, #0x1F
 	orr	ip, ip, #0x13
@@ -36,7 +36,7 @@ syscall_enter:
 	orr	ip, ip, #31
 	msr	cpsr_c, ip
 	mov	ip, sp
-	stmfd	sp!, {r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, ip, lr}
+	stmfd	sp!, {r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, fp, ip, lr}
 	mov	r2, sp
 	mrs	ip, cpsr
 	bic	ip, ip, #0x1F
@@ -49,16 +49,27 @@ syscall_enter:
 	str	ip, [r0, #4]
 	str	r3, [r0, #8]
 	mov	ip, r3
-	ldr	r3, [ip, #-4]
+	ldr	r3, [r3, #-4]
 	and	ip, r3, #0xFF
 	str	ip, [r1]
-	and	ip, r3, #0x100
-	teq	ip, #0x100
-	ldreq	r0, [r2]
-	streq	r0, [r1, #4]
-	and	ip, r3, #0x200
-	teq	ip, #0x200
-	ldreq	r0, [r2, #4]
-	streq	r0, [r1, #8]
+	and	ip, r3, #0x700
+	mov	ip, ip, lsr #8
+	add	r1, r1, #4
+	teq	ip, #5
+	bne	__syscall_enter_arguments_bottom__
+	ldr	r0, [r2, #48]
+	ldr	r0, [r0, #8]
+	str	r0, [r1, #16]
+	sub	ip, ip, #1
+	b	__syscall_enter_arguments_bottom__
+__syscall_enter_arguments_top__:
+	ldr	r0, [r2]
+	str	r0, [r1]
+	add	r2, r2, #4
+	add	r1, r1, #4
+	sub	ip, ip, #1
+__syscall_enter_arguments_bottom__:
+	teq	ip, #0x0
+	bne	__syscall_enter_arguments_top__
 	mov	pc, lr
 	.size	syscall_enter, .-syscall_enter

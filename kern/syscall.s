@@ -5,7 +5,7 @@
 Create:
 	mov	ip, sp
 	stmfd	sp!, {sp, lr}
-	swi	#0x300
+	swi	#0x200
 	ldmfd	sp, {sp, pc}
 	.size	Create, .-Create
 	.align	2
