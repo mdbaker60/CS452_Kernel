@@ -3,7 +3,7 @@
 #include <task.h>
 #include <syscall.h>
 #include <userTasks.h>
-
+#include <mem.h>
 static int *freeMemStart;
 static int *kernMemStart;
 static int nextTID;
@@ -14,6 +14,16 @@ static struct Queue *readyQueue;
 int main() {
   *((int *)0x28) = (int)syscall_enter;
   nextTID = 0;
+  memInit(getSP()); 
+  bwprintf(COM2, "strapped\r");
+  kernMemStart = malloc(0x400);
+  bwprintf(COM2, "kernMemStart:%d\r", kernMemStart);
+  freeMemStart = malloc(0x400); 
+  bwprintf(COM2, "freeMemStart:%d\r", freeMemStart);
+  readyQueue = malloc(sizeof(struct Queue));
+  bwprintf(COM2, "ReadyQueue:%d\r", readyQueue);
+  init(readyQueue);
+  activeRequest = malloc(sizeof(struct Request *));
  /* 
   kernMemStart = getSP();
   //leave 1KB of stack space for function calls
@@ -30,6 +40,7 @@ int main() {
   kernMemStart -= sizeof(struct Request);
   activeRequest = (struct Request *)kernMemStart;
 */
+
   //create a test TD
   active = NULL;
   active = Create_sys(1, firstTask);
