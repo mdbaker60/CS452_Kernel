@@ -18,8 +18,8 @@ int main() {
   nextTID = 0;
 
   kernMemStart = getSP();
-  //leave 1KB of stack space for function calls
-  kernMemStart -= 0x400;
+  //leave 250KB of stack space for function calls
+  kernMemStart -= 0xFA00;
 
   //initialize the readyQueue
   kernMemStart -= sizeof(struct PriorityQueue);
@@ -68,7 +68,7 @@ int Create_sys(int priority, void (*code)()) {
   *(newTD->SP + 12) = (int)freeMemStart;	//stack pointer
   enqueue(readyQueue, newTD, priority);
 
-  freeMemStart -= 0x3E800;	//give each task 1KB of stack space
+  freeMemStart -= 0xFA00;	//give each task 250KB of stack space
 
   return newTD->ID;
 }
@@ -76,7 +76,7 @@ int Create_sys(int priority, void (*code)()) {
 void handle(struct Request *request) {
   switch(request->ID) {
     case 0:					//Create
-      if(request->arg2 <= freeMemStart) {	//code pointer on the stack
+      if((int *)request->arg2 >= freeMemStart) {	//code pointer on the stack
         *(active->SP) = -3;
       }else if(request->arg1 >= NUMPRIO || request->arg1 < 0) {	//invalid priority
 	*(active->SP) = -1;
@@ -84,11 +84,11 @@ void handle(struct Request *request) {
         *(active->SP) = -2;
       }else{
         *(active->SP) = Create_sys(request->arg1, (void (*)())request->arg2);
-        active->state = READY;
-        enqueue(readyQueue, active, active->priority);
-        active = dequeue(readyQueue);
-        active->state = ACTIVE;
       }
+      active->state = READY;
+      enqueue(readyQueue, active, active->priority);
+      active = dequeue(readyQueue);
+      active->state = ACTIVE;
       break;
     case 1:				//MyTid
       *(active->SP) = active->ID;
