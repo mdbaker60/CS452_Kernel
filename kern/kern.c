@@ -11,7 +11,7 @@ static int nextTID;
 static struct Task *active;
 static struct Request activeRequest;
 static struct PriorityQueue readyQueue;
-static struct Task *taskArray;
+static struct Task taskArray[MAXTASKS];
 
 int main() {
   *((int *)0x28) = (int)syscall_enter;
@@ -31,8 +31,8 @@ int main() {
 
   //initialize the array of task destriptors
   //TODO fix this
-  kernMemStart -= MAXTASKS*sizeof(struct Task);
-  taskArray = (struct Task *)kernMemStart;
+  //kernMemStart -= MAXTASKS*sizeof(struct Task);
+  //taskArray = (struct Task *)kernMemStart;
 
   //now start available user memory at this point
   freeMemStart = kernMemStart;
