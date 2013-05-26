@@ -42,6 +42,11 @@ int main() {
 int Create_sys(int priority, void (*code)()) {
   static int nextTID = 0;
 
+  //enusure we can make a task
+  if(nextTID == MAXTASKS) {
+    return -2;
+  }
+
   struct Task *newTD = &taskArray[nextTID];
   //initialize user task context
   newTD->SP = freeMemStart-56;		//loaded during user task schedule
@@ -71,8 +76,6 @@ void handle(struct Request *request) {
         *(active->SP) = -3;
       }else if(request->arg1 >= NUMPRIO || request->arg1 < 0) {	//invalid priority
 	*(active->SP) = -1;
-      }else if(nextTID >= MAXTASKS) {				//out of TDs
-        *(active->SP) = -2;
       }else{
         *(active->SP) = Create_sys(request->arg1, (void (*)())request->arg2);
       }
