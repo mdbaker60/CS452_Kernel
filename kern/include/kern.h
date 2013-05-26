@@ -4,7 +4,7 @@
 #include <values.h>
 #include <task.h>
 
-#define MAXTASKS 100
+#define MAXTASKS 10 //TODO CHANGE ME BACK
 
 int *getSP();
 int Create_sys(int priority, void (*code)());
