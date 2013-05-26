@@ -9,42 +9,35 @@ static int *freeMemStart;
 static int *kernMemStart;
 static int nextTID;
 static struct Task *active;
-static struct Request activeRequest;
-static struct PriorityQueue readyQueue;
-static struct Task taskArray[MAXTASKS];
+static struct PriorityQueue *readyQueue;
+static struct Request *activeRequest;
+static struct Task *taskArray;
 
 int main() {
+  struct Request kactiveRequest;
+  struct PriorityQueue kreadyQueue;
+  struct Task ktaskArray[MAXTASKS];
+  activeRequest = &kactiveRequest; 
+  readyQueue = &kreadyQueue;
+  taskArray = ktaskArray;
+
   *((int *)0x28) = (int)syscall_enter;
   nextTID = 0;
   kernMemStart = getSP();
   //leave 250KB of stack space for function calls
   kernMemStart -= 0xFA00;
 
-  //initialize the readyQueue
-  //kernMemStart -= sizeof(struct PriorityQueue);
-  //readyQueue = (struct PriorityQueue *)kernMemStart;
-  initQueue(&readyQueue);
-
-  //initialize the active request structure
-  //kernMemStart -= sizeof(struct Request);
-  //activeRequest = (struct Request *)kernMemStart;
-
-  //initialize the array of task destriptors
-  //TODO fix this
-  //kernMemStart -= MAXTASKS*sizeof(struct Task);
-  //taskArray = (struct Task *)kernMemStart;
-
-  //now start available user memory at this point
+  initQueue(readyQueue);
   freeMemStart = kernMemStart;
 
   //create the first user task
   active = NULL;
   Create_sys(1, firstTask);
-  active = dequeue(&readyQueue);
+  active = dequeue(readyQueue);
   active->state = ACTIVE;
   while(active != NULL) {
-    getNextRequest(active, &activeRequest);
-    handle(&activeRequest);
+    getNextRequest(active, activeRequest);
+    handle(activeRequest);
   }
 
   return 0;
@@ -66,7 +59,7 @@ int Create_sys(int priority, void (*code)()) {
   newTD->priority = priority;
   newTD->next = NULL;
   *(newTD->SP + 12) = (int)freeMemStart;	//stack pointer
-  enqueue(&readyQueue, newTD, priority);
+  enqueue(readyQueue, newTD, priority);
 
   freeMemStart -= 0xFA00;	//give each task 250KB of stack space
 
@@ -86,33 +79,33 @@ void handle(struct Request *request) {
         *(active->SP) = Create_sys(request->arg1, (void (*)())request->arg2);
       }
       active->state = READY;
-      enqueue(&readyQueue, active, active->priority);
-      active = dequeue(&readyQueue);
+      enqueue(readyQueue, active, active->priority);
+      active = dequeue(readyQueue);
       active->state = ACTIVE;
       break;
     case 1:				//MyTid
       *(active->SP) = active->ID;
       active->state = READY;
-      enqueue(&readyQueue, active, active->priority);
-      active = dequeue(&readyQueue);
+      enqueue(readyQueue, active, active->priority);
+      active = dequeue(readyQueue);
       active->state = ACTIVE;
       break;
     case 2:				//MyParentTid
       *(active->SP) = active->parentID;
       active->state = READY;
-      enqueue(&readyQueue, active, active->priority);
-      active = dequeue(&readyQueue);
+      enqueue(readyQueue, active, active->priority);
+      active = dequeue(readyQueue);
       active->state = ACTIVE;
       break;
     case 3:				//Pass
       active->state = READY;
-      enqueue(&readyQueue, active, active->priority);
-      active = dequeue(&readyQueue);
+      enqueue(readyQueue, active, active->priority);
+      active = dequeue(readyQueue);
       active->state = ACTIVE;
       break;
     case 4:				//Exit
       active->state = ZOMBIE;
-      active = dequeue(&readyQueue);
+      active = dequeue(readyQueue);
       active->state = ACTIVE;
       break;
   }
