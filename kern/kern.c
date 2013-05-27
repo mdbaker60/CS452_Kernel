@@ -36,8 +36,8 @@ int main() {
   active = dequeue(readyQueue);
   active->state = ACTIVE;
   while(active != NULL) {
-    getNextRequest(active, &activeRequest);
-    handle(&activeRequest);
+    getNextRequest(active, activeRequest);
+    handle(activeRequest);
   }
 
   return 0;
