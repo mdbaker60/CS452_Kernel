@@ -7,18 +7,22 @@
 
 static int *freeMemStart;
 static int *kernMemStart;
+static int nextTID;
 static struct Task *active;
 static struct PriorityQueue *readyQueue;
+static struct Request *activeRequest;
 static struct Task *taskArray;
 
 int main() {
-  struct Request activeRequest;
+  struct Request kactiveRequest;
   struct PriorityQueue kreadyQueue;
   struct Task ktaskArray[MAXTASKS];
+  activeRequest = &kactiveRequest; 
   readyQueue = &kreadyQueue;
   taskArray = ktaskArray;
 
   *((int *)0x28) = (int)syscall_enter;
+  nextTID = 0;
   kernMemStart = getSP();
   //leave 250KB of stack space for function calls
   kernMemStart -= 0xFA00;
@@ -40,8 +44,6 @@ int main() {
 }
 
 int Create_sys(int priority, void (*code)()) {
-  static int nextTID = 0;
-
   struct Task *newTD = &taskArray[nextTID];
   //initialize user task context
   newTD->SP = freeMemStart-56;		//loaded during user task schedule
