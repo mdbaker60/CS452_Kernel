@@ -13,6 +13,9 @@ static struct PriorityQueue *readyQueue;
 static struct Request *activeRequest;
 static struct Task *taskArray;
 
+//TODO remove
+void memcopy(char *destination, const char *source, int num);
+
 int main() {
   struct Request kactiveRequest;
   struct PriorityQueue kreadyQueue;
@@ -40,6 +43,13 @@ int main() {
     handle(activeRequest);
   }
 
+  int i;
+  for(i=0; i<nextTID; i++) {
+    if(taskArray[i].state != ZOMBIE) {
+      bwprintf(COM2, "WARNING: task %d has not exited\r", i);
+    }
+  }
+
   return 0;
 }
 
@@ -58,6 +68,7 @@ int Create_sys(int priority, void (*code)()) {
   newTD->state = READY;
   newTD->priority = priority;
   newTD->next = NULL;
+  newTD->sendQHead = NULL;
   *(newTD->SP + 12) = (int)freeMemStart;	//stack pointer
   enqueue(readyQueue, newTD, priority);
 
@@ -108,5 +119,90 @@ void handle(struct Request *request) {
       active = dequeue(readyQueue);
       active->state = ACTIVE;
       break;
+    case 5:				//Send
+      if(taskArray[request->arg1].state == SND_BL) {
+        struct Task *receiverTask = &taskArray[request->arg1];
+	int messageLength = (receiverTask->messageLength < request->arg3) 
+		? receiverTask->messageLength : request->arg3;
+        memcopy(receiverTask->messageBuffer, (char *)request->arg2, messageLength);
+	*(receiverTask->senderTid) = active->ID;
+	*(receiverTask->SP) = request->arg3;
+	*(active->SP) = 0;
+        receiverTask->state = READY;
+        enqueue(readyQueue, receiverTask, receiverTask->priority);
+        active->state = RPL_BL;
+	active->replyBuffer = (char *)request->arg4;
+	active->replyLength = request->arg5;
+        active = dequeue(readyQueue);
+        active->state = ACTIVE;
+      }else{
+	struct Task *receiverTask = &taskArray[request->arg1];
+	active->state = RCV_BL;
+	active->messageBuffer = (char *)request->arg2;
+	active->messageLength = request->arg3;
+	active->replyBuffer = (char *)request->arg4;
+	active->replyLength = request->arg5;
+	if(receiverTask->sendQHead == NULL) {
+	  receiverTask->sendQHead = receiverTask->sendQTail = active;
+	}else{
+	  (receiverTask->sendQTail)->next = active;
+	  receiverTask->sendQTail = active;
+	}
+	active = dequeue(readyQueue);
+	active->state = ACTIVE;
+      }
+      break;
+    case 6:				//Receive
+      if(active->sendQHead == NULL) {	//No tasks have sent
+        active->state = SND_BL;
+        active->messageBuffer = (char *)request->arg2;
+        active->messageLength = request->arg3;
+        active->senderTid = (int *)request->arg1;
+        active = dequeue(readyQueue);
+        active->state = ACTIVE;
+      }else{
+	struct Task *senderTask = active->sendQHead;
+	active->sendQHead = senderTask->next;
+	senderTask->next = NULL;
+	int messageLength = (senderTask->messageLength < request->arg3)
+		? senderTask->messageLength : request->arg3;
+	memcopy((char *)request->arg2, senderTask->messageBuffer, messageLength);
+	*((int *)request->arg1) = senderTask->ID;
+	*(active->SP) = senderTask->messageLength;
+	*(senderTask->SP) = 0;
+	senderTask->state = RPL_BL;
+	active->state = READY;
+	enqueue(readyQueue, active, active->priority);
+	active = dequeue(readyQueue);
+	active->state = ACTIVE;
+      }
+      break;
+    case 7:				//Reply
+      if(taskArray[request->arg1].state == RPL_BL) {
+	struct Task *senderTask = &taskArray[request->arg1];
+	int replyLength = (senderTask->replyLength < request->arg3)
+		? senderTask->replyLength : request->arg3;
+	memcopy(senderTask->replyBuffer, (char *)request->arg2, replyLength);
+	*(senderTask->SP) = request->arg3;
+	*(active->SP) = 0;
+	senderTask->state = READY;
+	enqueue(readyQueue, senderTask, senderTask->priority);
+	active->state = READY;
+	enqueue(readyQueue, active, active->priority);
+	active = dequeue(readyQueue);
+	active->state = ACTIVE;
+      }else{
+	bwprintf(COM2, "task not reply blocked\r");
+      }
+      break;
+  }
+  //TODO move scheduling into functions
+}
+
+//TODO move this somewhere better
+void memcopy(char *destination, const char *source, int num) {
+  int i;
+  for(i=0; i<num; i++) {
+    *destination++ = *source++;
   }
 }

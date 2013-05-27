@@ -1,7 +1,7 @@
 #ifndef __TASK_H__
 #define __TASK_H__
 
-enum State {READY, ACTIVE, ZOMBIE};
+enum State {READY, ACTIVE, ZOMBIE, RCV_BL, RPL_BL, SND_BL};
 
 struct Task {
   int *SP;
@@ -12,6 +12,13 @@ struct Task {
   struct Task *next;
   enum State state;
   int priority;
+  char *messageBuffer;
+  int messageLength;
+  char *replyBuffer;
+  int replyLength;
+  int *senderTid;
+  struct Task *sendQHead;
+  struct Task *sendQTail;
 };
 
 struct Request {

@@ -7,7 +7,7 @@ ASFLAGS = -mcpu=arm920t -mapcs-32
 
 LDFLAGS = -init main -Map bin/kern.map -N -T kern/orex.ld -L/u/wbcowan/gnuarm-4.0.2/lib/gcc/arm-elf/4.0.2 -L/u/wbcowan/cs452/io/lib
 
-all: bin/kern.s bin/kern.elf
+all: bin/kern.s bin/kern_a2.elf
 
 bin/kern.s: kern/kern.c kern/include/kern.h kern/include/task.h kern/include/queue.h
 	$(XCC) -S $(CFLAGS) kern/kern.c
@@ -30,6 +30,6 @@ bin/queue.o: bin/queue.s
 bin/userTasks.o: bin/userTasks.s
 	$(AS) $(ASFLAGS) -o bin/userTasks.o bin/userTasks.s
 
-bin/kern.elf: bin/kern.o bin/userTasks.o bin/queue.o
-	$(LD) $(LDFLAGS) -o bin/kern.elf bin/kern.o bin/queue.o bin/userTasks.o -lbwio -lgcc
-	cp bin/kern.elf /u/cs452/tftp/ARM/djgroot/kern.elf
+bin/kern_a2.elf: bin/kern.o bin/userTasks.o bin/queue.o
+	$(LD) $(LDFLAGS) -o bin/kern_a2.elf bin/kern.o bin/queue.o bin/userTasks.o -lbwio -lgcc
+	cp bin/kern_a2.elf /u/cs452/tftp/ARM/djgroot/kern_a2.elf
