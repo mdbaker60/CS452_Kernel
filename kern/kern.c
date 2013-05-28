@@ -4,7 +4,7 @@
 #include <syscall.h>
 #include <userTasks.h>
 #include <queue.h>
-
+#include <mem.h>
 static int *freeMemStart;
 static int *kernMemStart;
 static int nextTID;
