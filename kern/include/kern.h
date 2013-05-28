@@ -16,7 +16,5 @@ void getNextRequest(struct Task *task, struct Request *request);
 void handle(struct Request *request);
 struct Task *getNextTask();
 void makeTaskReady(struct Task *task);
-char *memcpy(char *destination, const char *source, int num);
-char *memcpy_aligned(char *destination, const char *source, int num);
 
 #endif
