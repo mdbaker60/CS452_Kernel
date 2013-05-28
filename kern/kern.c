@@ -164,8 +164,6 @@ void handle(struct Request *request) {
 	senderTask->next = NULL;
 	memcpy((char *)request->arg2, senderTask->messageBuffer,
 		MIN(senderTask->messageLength, request->arg3));
-	((char *)(request->arg2))[99] = '\0';
-	bwprintf(COM2, "just copies, value is \"%s\" to address 0x%x\r", request->arg2, request->arg2);
 	*((int *)request->arg1) = senderTask->ID;
 	*(active->SP) = senderTask->messageLength;
 	senderTask->state = RPL_BL;
@@ -182,8 +180,6 @@ void handle(struct Request *request) {
 	struct Task *senderTask = &taskArray[request->arg1];
 	memcpy(senderTask->replyBuffer, (char *)request->arg2,
 		MIN(senderTask->replyLength, request->arg3));
-	((char *)(senderTask->replyBuffer))[99] = '\0';
-	bwprintf(COM2, "just copied, value is \"%s\" to address 0x%x\r", senderTask->replyBuffer, senderTask->replyBuffer);
 	*(senderTask->SP) = request->arg3;
 	*(active->SP) = 0;
 	makeTaskReady(senderTask);
@@ -205,4 +201,21 @@ struct Task *getNextTask() {
 void makeTaskReady(struct Task *task) {
   task->state = READY;
   enqueue(readyQueue, task, task->priority);
+}
+
+char *memcpy(char *destination, const char *source, int num) {
+  if(((int)destination & 3) == ((int)source & 3)) {	//same word alignment
+    return memcpy_aligned(destination, source, num);
+  }
+
+  int i;
+  void *retVal = destination;
+  if(num > 0) {
+    *destination = *source;
+  }
+  for(i=1; i<num; i++) {
+    *++destination = *++source;
+  }
+
+  return retVal;
 }

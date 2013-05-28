@@ -73,11 +73,22 @@ __syscall_enter_arguments_bottom__:
 	mov	pc, lr
 	.size	syscall_enter, .-syscall_enter
 	.align	2
-	.global	memcopy
-	.type	memcopy, %function
-memcpy:
+	.global	memcpy_aligned
+	.type	memcpy_aligned, %function
+memcpy_aligned:
 	mov	ip, sp
 	stmfd	sp!, {r0, r3 - r10, ip, lr}
+	and	r3, r1, #3
+__memcopy_byte:
+	cmp 	r3, #4
+	beq 	__memcopy32__
+	ldrb	r4, [r1]
+	strb	r4, [r0]
+	add	r1, r1, #1
+	add	r0, r0, #1
+	add	r3, r3, #1
+	sub	r2, r2, #1
+	b	__memcopy_byte
 __memcopy32__:
 	cmp	r2, #32
 	blt	__memcopy16__
@@ -107,13 +118,13 @@ __memcopy4__:
 	sub	r2, r2, #4
 __memcopy2__:
 	cmp	r2, #0
-	beq	__memcopydone__
+	beq	__memcopy_done__
 	ldrb	r3, [r1]
 	strb	r3, [r0]
 	add	r1, r1, #1
 	add	r0, r0, #1
 	sub	r2, r2, #1
 	b	__memcopy2__
-__memcopydone__:
+__memcopy_done__:
 	ldmfd	sp, {r0, r3 - r10, sp, pc}
-	.size	memcopy, .-memcopy
+	.size	memcpy_aligned, .-memcpy_aligned
