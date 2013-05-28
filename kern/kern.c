@@ -24,6 +24,14 @@ int main() {
   readyQueue = &kreadyQueue;
   taskArray = ktaskArray;
 
+  //initialize all tasks's tids to -1
+  //so we can identify if they have been
+  //created later
+  int i;
+  for(i=0; i<MAXTASKS; i++) {
+    taskArray[i].ID = -1;
+  }
+
   *((int *)0x28) = (int)syscall_enter;
   nextTID = 0;
   kernMemStart = getSP();
@@ -38,12 +46,12 @@ int main() {
   Create_sys(1, firstTask);
   active = dequeue(readyQueue);
   active->state = ACTIVE;
+
   while(active != NULL) {
     getNextRequest(active, activeRequest);
     handle(activeRequest);
   }
 
-  int i;
   for(i=0; i<nextTID; i++) {
     if(taskArray[i].state != ZOMBIE) {
       bwprintf(COM2, "WARNING: task %d has not exited\r", i);
@@ -89,52 +97,48 @@ void handle(struct Request *request) {
       }else{
         *(active->SP) = Create_sys(request->arg1, (void (*)())request->arg2);
       }
-      active->state = READY;
-      enqueue(readyQueue, active, active->priority);
-      active = dequeue(readyQueue);
-      active->state = ACTIVE;
+      makeTaskReady(active);
+      active = getNextTask();
       break;
     case 1:				//MyTid
       *(active->SP) = active->ID;
-      active->state = READY;
-      enqueue(readyQueue, active, active->priority);
-      active = dequeue(readyQueue);
-      active->state = ACTIVE;
+      makeTaskReady(active);
+      active = getNextTask();
       break;
     case 2:				//MyParentTid
       *(active->SP) = active->parentID;
-      active->state = READY;
-      enqueue(readyQueue, active, active->priority);
-      active = dequeue(readyQueue);
-      active->state = ACTIVE;
+      makeTaskReady(active);
+      active = getNextTask();
       break;
     case 3:				//Pass
-      active->state = READY;
-      enqueue(readyQueue, active, active->priority);
-      active = dequeue(readyQueue);
-      active->state = ACTIVE;
+      makeTaskReady(active);
+      active = getNextTask();
       break;
     case 4:				//Exit
       active->state = ZOMBIE;
-      active = dequeue(readyQueue);
-      active->state = ACTIVE;
+      active = getNextTask();
       break;
     case 5:				//Send
-      if(taskArray[request->arg1].state == SND_BL) {
+      if(request->arg1 >= MAXTASKS) {			//impossible TID
+	*(active->SP) = -1;
+	makeTaskReady(active);
+      }else if(taskArray[request->arg1].ID == -1 || taskArray[request->arg1].state == ZOMBIE) {
+	//task not created or has exited
+	*(active->SP) = -2;
+	makeTaskReady(active);
+      }else if(request->arg1 == active->ID) {	//sending to yourself?
+	*(active->SP) = -3;
+	makeTaskReady(active);
+      }else if(taskArray[request->arg1].state == SND_BL) {
         struct Task *receiverTask = &taskArray[request->arg1];
-	int messageLength = (receiverTask->messageLength < request->arg3) 
-		? receiverTask->messageLength : request->arg3;
-        memcopy(receiverTask->messageBuffer, (char *)request->arg2, messageLength);
+        memcopy(receiverTask->messageBuffer, (char *)request->arg2, 
+		MIN(receiverTask->messageLength, request->arg3));
 	*(receiverTask->senderTid) = active->ID;
 	*(receiverTask->SP) = request->arg3;
-	*(active->SP) = 0;
-        receiverTask->state = READY;
-        enqueue(readyQueue, receiverTask, receiverTask->priority);
+	makeTaskReady(receiverTask);
         active->state = RPL_BL;
 	active->replyBuffer = (char *)request->arg4;
 	active->replyLength = request->arg5;
-        active = dequeue(readyQueue);
-        active->state = ACTIVE;
       }else{
 	struct Task *receiverTask = &taskArray[request->arg1];
 	active->state = RCV_BL;
@@ -148,9 +152,8 @@ void handle(struct Request *request) {
 	  (receiverTask->sendQTail)->next = active;
 	  receiverTask->sendQTail = active;
 	}
-	active = dequeue(readyQueue);
-	active->state = ACTIVE;
       }
+      active = getNextTask();
       break;
     case 6:				//Receive
       if(active->sendQHead == NULL) {	//No tasks have sent
@@ -158,45 +161,49 @@ void handle(struct Request *request) {
         active->messageBuffer = (char *)request->arg2;
         active->messageLength = request->arg3;
         active->senderTid = (int *)request->arg1;
-        active = dequeue(readyQueue);
-        active->state = ACTIVE;
       }else{
 	struct Task *senderTask = active->sendQHead;
 	active->sendQHead = senderTask->next;
 	senderTask->next = NULL;
-	int messageLength = (senderTask->messageLength < request->arg3)
-		? senderTask->messageLength : request->arg3;
-	memcopy((char *)request->arg2, senderTask->messageBuffer, messageLength);
+	memcopy((char *)request->arg2, senderTask->messageBuffer,
+		MIN(senderTask->messageLength, request->arg3));
 	*((int *)request->arg1) = senderTask->ID;
 	*(active->SP) = senderTask->messageLength;
-	*(senderTask->SP) = 0;
 	senderTask->state = RPL_BL;
-	active->state = READY;
-	enqueue(readyQueue, active, active->priority);
-	active = dequeue(readyQueue);
-	active->state = ACTIVE;
+	makeTaskReady(active);
       }
+      active = getNextTask();
       break;
     case 7:				//Reply
-      if(taskArray[request->arg1].state == RPL_BL) {
+      if(request->arg1 >= MAXTASKS) {
+	*(active->SP) = -1;
+      }else if(taskArray[request->arg1].ID == -1 || taskArray[request->arg1].state == ZOMBIE) {
+	*(active->SP) = -2;
+      }else if(taskArray[request->arg1].state == RPL_BL) {
 	struct Task *senderTask = &taskArray[request->arg1];
-	int replyLength = (senderTask->replyLength < request->arg3)
-		? senderTask->replyLength : request->arg3;
-	memcopy(senderTask->replyBuffer, (char *)request->arg2, replyLength);
+	memcopy(senderTask->replyBuffer, (char *)request->arg2,
+		MIN(senderTask->replyLength, request->arg3));
 	*(senderTask->SP) = request->arg3;
 	*(active->SP) = 0;
-	senderTask->state = READY;
-	enqueue(readyQueue, senderTask, senderTask->priority);
-	active->state = READY;
-	enqueue(readyQueue, active, active->priority);
-	active = dequeue(readyQueue);
-	active->state = ACTIVE;
+	makeTaskReady(senderTask);
       }else{
-	bwprintf(COM2, "task not reply blocked\r");
+	*(active->SP) = -3;
       }
+      makeTaskReady(active);
+      active = getNextTask();
       break;
   }
-  //TODO move scheduling into functions
+}
+
+//scheduling functions
+struct Task *getNextTask() {
+  struct Task *nextTask = dequeue(readyQueue);
+  nextTask->state = READY;
+  return nextTask;
+}
+void makeTaskReady(struct Task *task) {
+  task->state = READY;
+  enqueue(readyQueue, task, task->priority);
 }
 
 //TODO move this somewhere better
