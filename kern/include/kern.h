@@ -16,6 +16,6 @@ void getNextRequest(struct Task *task, struct Request *request);
 void handle(struct Request *request);
 struct Task *getNextTask();
 void makeTaskReady(struct Task *task);
-void memcopy(char *destination, const char *source, int num);
+void *memcpy(void *destination, const void *source, int num);
 
 #endif

@@ -164,6 +164,8 @@ void handle(struct Request *request) {
 	senderTask->next = NULL;
 	memcpy((char *)request->arg2, senderTask->messageBuffer,
 		MIN(senderTask->messageLength, request->arg3));
+	((char *)(request->arg2))[99] = '\0';
+	bwprintf(COM2, "just copies, value is \"%s\" to address 0x%x\r", request->arg2, request->arg2);
 	*((int *)request->arg1) = senderTask->ID;
 	*(active->SP) = senderTask->messageLength;
 	senderTask->state = RPL_BL;
@@ -180,6 +182,8 @@ void handle(struct Request *request) {
 	struct Task *senderTask = &taskArray[request->arg1];
 	memcpy(senderTask->replyBuffer, (char *)request->arg2,
 		MIN(senderTask->replyLength, request->arg3));
+	((char *)(senderTask->replyBuffer))[99] = '\0';
+	bwprintf(COM2, "just copied, value is \"%s\" to address 0x%x\r", senderTask->replyBuffer, senderTask->replyBuffer);
 	*(senderTask->SP) = request->arg3;
 	*(active->SP) = 0;
 	makeTaskReady(senderTask);
