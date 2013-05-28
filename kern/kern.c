@@ -13,9 +13,6 @@ static struct PriorityQueue *readyQueue;
 static struct Request *activeRequest;
 static struct Task *taskArray;
 
-//TODO remove
-void memcopy(char *destination, const char *source, int num);
-
 int main() {
   struct Request kactiveRequest;
   struct PriorityQueue kreadyQueue;
@@ -131,7 +128,7 @@ void handle(struct Request *request) {
 	makeTaskReady(active);
       }else if(taskArray[request->arg1].state == SND_BL) {
         struct Task *receiverTask = &taskArray[request->arg1];
-        memcopy(receiverTask->messageBuffer, (char *)request->arg2, 
+        memcpy(receiverTask->messageBuffer, (char *)request->arg2, 
 		MIN(receiverTask->messageLength, request->arg3));
 	*(receiverTask->senderTid) = active->ID;
 	*(receiverTask->SP) = request->arg3;
@@ -165,7 +162,7 @@ void handle(struct Request *request) {
 	struct Task *senderTask = active->sendQHead;
 	active->sendQHead = senderTask->next;
 	senderTask->next = NULL;
-	memcopy((char *)request->arg2, senderTask->messageBuffer,
+	memcpy((char *)request->arg2, senderTask->messageBuffer,
 		MIN(senderTask->messageLength, request->arg3));
 	*((int *)request->arg1) = senderTask->ID;
 	*(active->SP) = senderTask->messageLength;
@@ -181,7 +178,7 @@ void handle(struct Request *request) {
 	*(active->SP) = -2;
       }else if(taskArray[request->arg1].state == RPL_BL) {
 	struct Task *senderTask = &taskArray[request->arg1];
-	memcopy(senderTask->replyBuffer, (char *)request->arg2,
+	memcpy(senderTask->replyBuffer, (char *)request->arg2,
 		MIN(senderTask->replyLength, request->arg3));
 	*(senderTask->SP) = request->arg3;
 	*(active->SP) = 0;
@@ -204,12 +201,4 @@ struct Task *getNextTask() {
 void makeTaskReady(struct Task *task) {
   task->state = READY;
   enqueue(readyQueue, task, task->priority);
-}
-
-//TODO move this somewhere better
-void memcopy(char *destination, const char *source, int num) {
-  int i;
-  for(i=0; i<num; i++) {
-    *destination++ = *source++;
-  }
 }
