@@ -95,16 +95,16 @@ void Server(){
 			else{
 				bwprintf(COM2, "both players have made their moves\r");
 				if (playerMove[playerTable[src]] == in.message){
-					Reply(in.message, (char*)&tie, sizeof(int));
+					Reply(src, (char*)&tie, sizeof(int));
 					Reply(playerTable[src], (char*)&tie, sizeof(int));
 				}else if ((playerMove[playerTable[src]] == 2 && in.message == 0)|| !(in.message == 2 && playerMove[playerTable[src]] == 0) 
 				   || in.message > playerMove[src]){
-					Reply(in.message, (char*)&win, sizeof(int));
+					Reply(src, (char*)&win, sizeof(int));
 					Reply(playerTable[src], (char*)&loss, sizeof(int));
 				}
 				else{
 					
-					Reply(in.message, (char *)&loss, sizeof(int));
+					Reply(src, (char *)&loss, sizeof(int));
 					Reply(playerTable[src], (char *)&win, sizeof(int));
 				}
 				playerMove[playerTable[src]] = -1;
@@ -138,8 +138,8 @@ void Client(){
 		if (ret == 2)break;
 		out.message = move;	
 		Send(RPSserver, (char*)&out, sizeof(struct msg), (char *) &ret, sizeof(int)); 
-		if (ret == 4) bwprintf(COM2, "%d: We Tie\r", MyTid());
-		if (ret) bwprintf(COM2, "%d: I Win\r", MyTid());
+		if (ret == 3) bwprintf(COM2, "%d: We Tie\r", MyTid());
+		else if (ret) bwprintf(COM2, "%d: I Win\r", MyTid());
 		else if (!ret) bwprintf(COM2, "%d: I Lose\r", MyTid());
 		
 		bwgetc(COM2);
