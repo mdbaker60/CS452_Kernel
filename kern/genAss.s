@@ -11,7 +11,7 @@ getSP:
 	.type	getNextRequest, %function
 getNextRequest:
 	mov	ip, sp
-	stmfd	sp!, {r0, r1, fp, ip, lr}
+	stmfd	sp!, {r0 - r10, fp, ip, lr}
 	ldr	ip, [r0, #4]
 	msr	spsr, ip
 	ldr	lr, [r0, #8]
@@ -20,7 +20,7 @@ getNextRequest:
 	orr	ip, ip, #31
 	msr	cpsr_c, ip
 	ldr	sp, [r0]
-	ldmfd	sp, {r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, fp, sp, lr}
+	ldmfd	sp, {r0 - r10, fp, sp, lr}
 	mrs	ip, cpsr
 	bic	ip, ip, #0x1F
 	orr	ip, ip, #0x13
@@ -36,14 +36,14 @@ syscall_enter:
 	orr	ip, ip, #31
 	msr	cpsr_c, ip
 	mov	ip, sp
-	stmfd	sp!, {r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, fp, ip, lr}
+	stmfd	sp!, {r0 - r10, fp, ip, lr}
 	mov	r2, sp
 	mrs	ip, cpsr
 	bic	ip, ip, #0x1F
 	orr	ip, ip, #0x13
 	msr	cpsr_c, ip
 	mov	r3, lr
-	ldmfd	sp, {r0, r1, fp, sp, lr}
+	ldmfd	sp, {r0 - r10, fp, sp, lr}
 	str	r2, [r0]
 	mrs	ip, spsr
 	str	ip, [r0, #4]
