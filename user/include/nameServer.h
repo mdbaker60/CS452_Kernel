@@ -2,7 +2,7 @@
 #define _NAMESERVER_H_
 
 void NSInit();
-int whoIs(char* task, char* rep);
-int resigterAs(char* name);
+int whoIs(char* task);
+int RegisterAs(char* name);
 
 #endif
