@@ -1,11 +1,9 @@
 #include <mem.h>
 #include <bwio.h>
 void strcp(char* dest, char* src, int len){
-	memcpy(dest, src, len);
+	memcpy(dest, src, len+1);
 }
 int strlen(char* str){
-	bwprintf(COM2, "In strlen\r");
-	bwprintf(COM2, "str: %s", str);
 	int ret = 0;
 
 	while (str[ret] != '\0') ret++;
