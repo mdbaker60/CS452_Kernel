@@ -1,6 +1,6 @@
 #include <bwio.h>
 #include <syscall.h>
-
+#include <nameServer.h>
 void producer() {
   char reply[100];
   char test[10];
@@ -43,9 +43,23 @@ void consumer() {
   }
   Exit();
 }
-
+void regger(){
+	//Registers with the nameserver
+	RegisterAs("RPS Server");		
+}
+void reqqer(){
+	char* who = "RPS Server";
+	char ret[100];
+	bwprintf(COM2, "Starting client\r");
+	whoIs(who);
+	if(ret == '\0') bwprintf(COM2, "nothing found\r");
+}
 void firstTask() {
-  Create(0, producer);
-  Create(0, consumer);
+ // Create(0, producer);
+  //Create(0, consumer);
+  Create(2, NSInit);
+  Create(5, regger);
+  Create(5, reqqer);
+  Pass();
   Exit();
 }
