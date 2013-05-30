@@ -92,7 +92,8 @@ void Server(){
 				playerMove[src] = in.message;
 			}
 			else{
-				if ((playerMove[src] == 2 && in.message == 0)|| in.message > playerMoves[src]){
+				if ((playerMove[playerTable[src]] == 2 && in.message == 0)|| !(in.message == 2 && playerMove[playerTable[src]] == 0) 
+				   || in.message > playerMove[src]){
 					Reply(in.message, (char*)&win, sizeof(int));
 					Reply(playerMove[src], (char*)&loss, sizeof(int));
 				}
@@ -101,12 +102,15 @@ void Server(){
 					Reply(in.message, (char *)&loss, sizeof(int));
 					Reply(playerMove[src], (char *)&win, sizeof(int));
 				}
-				playerMoves[src] = -1;	
+				playerMove[src] = -1;	
 			}
 			break;
 		  case 2:
-			bwprintf(COM2, "RPSServer: Quit\r");
-			Send(playerTable[src], &quit, sizeof(int));
+			if (playerTable[src] != -1){
+				bwprintf(COM2, "RPSServer: Quit\r");
+				Send(playerTable[src], (char*)&quit,sizeof(int), (char*)&in, sizeof(struct msg));
+				playerTable[playerTable[src]] = -1;
+			}
 		}
 	}
 }
@@ -115,7 +119,7 @@ void Client(){
 	int i;
 	char* who = "RPS Server";
 	struct msg out;
-	int ret;
+	int ret = -1;
 	bwprintf(COM2, "Starting client\r");
 	RPSserver = whoIs(who);
 	out.control = 0;	//Tells the server we want to register
@@ -123,16 +127,19 @@ void Client(){
 	Send(RPSserver,  (char*)&out, sizeof(struct msg), (char *) &ret, sizeof(int));
 	out.control = 1;
 	int move = 0;
-	for (i = 0; i < 12; i++){
+	for (i = 0; i < MyTid() + 12; i++){
 		//1 -	Win
 		//0 -	Loss
+		if (ret == 2)break;
 		out.message = move;	
 		Send(RPSserver, (char*)&out, sizeof(struct msg), (char *) &ret, sizeof(int)); 
-
+		if (ret) bwprintf(COM2, "%d: I Win\r", MyTid());
+		else if (!ret) bwprintf(COM2, "%d: I Lose\r", MyTid());
+		bwgetc(COM2);
 	}
 	out.control = 2;
 	Send(RPSserver, (char*)&out, sizeof(struct msg), (char *) &ret, sizeof(int));
-	
+	bwprintf(COM2, "%d: Quitting", MyTid());
 }
 void firstTask() {
  // Create(0, producer);
