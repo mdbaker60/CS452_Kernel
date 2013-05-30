@@ -115,6 +115,14 @@ void handle(struct Request *request) {
       active = getNextTask();
       break;
     case 4:				//Exit
+      //pop the send queue, returning -3
+      while(active->sendQHead != NULL) {
+        struct Task *queuedTask = active->sendQHead;
+	active->sendQHead = queuedTask->next;
+	queuedTask->next = NULL;
+	*(queuedTask->SP) = -3;
+	makeTaskReady(queuedTask);
+      }
       active->state = ZOMBIE;
       active = getNextTask();
       break;
