@@ -93,21 +93,21 @@ void Server(){
 				playerMove[src] = in.message;
 			}
 			else{
+				bwprintf(COM2, "both players have made their moves\r");
 				if (playerMove[playerTable[src]] == in.message){
 					Reply(in.message, (char*)&tie, sizeof(int));
-					Reply(playerMove[src], (char*)&tie, sizeof(int));
-				}
-				if ((playerMove[playerTable[src]] == 2 && in.message == 0)|| !(in.message == 2 && playerMove[playerTable[src]] == 0) 
+					Reply(playerTable[src], (char*)&tie, sizeof(int));
+				}else if ((playerMove[playerTable[src]] == 2 && in.message == 0)|| !(in.message == 2 && playerMove[playerTable[src]] == 0) 
 				   || in.message > playerMove[src]){
 					Reply(in.message, (char*)&win, sizeof(int));
-					Reply(playerMove[src], (char*)&loss, sizeof(int));
+					Reply(playerTable[src], (char*)&loss, sizeof(int));
 				}
 				else{
 					
 					Reply(in.message, (char *)&loss, sizeof(int));
-					Reply(playerMove[src], (char *)&win, sizeof(int));
+					Reply(playerTable[src], (char *)&win, sizeof(int));
 				}
-				playerMove[src] = -1;	
+				playerMove[playerTable[src]] = -1;
 			}
 			break;
 		  case 2:
@@ -154,6 +154,6 @@ void firstTask() {
   Create(2, NSInit);
   Create(5, Server);
   Create(5, Client);
-  Pass();
+  Create(5, Client);
   Exit();
 }
