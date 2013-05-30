@@ -25,6 +25,8 @@ _BssEnd = . ;
 text : /* The actual instructions. */
 {
 *(.text)
+*(.rodata)
+*(.rodata.str1.4)
 *(.got)
 *(.got.plt)
 *(.rodata)

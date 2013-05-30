@@ -36,14 +36,14 @@ syscall_enter:
 	orr	ip, ip, #31
 	msr	cpsr_c, ip
 	mov	ip, sp
-	stmfd	sp!, {r0 - r10, fp, ip, lr}
+	stmfd	sp!, {r0, r4 - r10, fp, ip, lr}
 	mov	r2, sp
 	mrs	ip, cpsr
 	bic	ip, ip, #0x1F
 	orr	ip, ip, #0x13
 	msr	cpsr_c, ip
 	mov	r3, lr
-	ldmfd	sp, {r0 - r10, fp, sp, lr}
+	ldmfd	sp, {r0, r4 - r10, fp, sp, lr}
 	str	r2, [r0]
 	mrs	ip, spsr
 	str	ip, [r0, #4]

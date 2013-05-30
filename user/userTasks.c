@@ -1,65 +1,77 @@
 #include <bwio.h>
+#include <clock.h>
 #include <syscall.h>
-#include <nameServer.h>
-void producer() {
-  char reply[100];
-  char test[10];
-  int i;
-  for(i=0; i<9; i++) {
-    test[i] = '1';
-  }
-  for(i=0; i<100; i++) {
-    reply[i] = '*';
-  }
-  test[9] = '\0';
-  Send(2, "This message is waaaaay too long!", 34, reply, 10);
-  reply[9] = '\0';
-  bwprintf(COM2, "received reply \"%s\" and test is \"%s\"\r", reply, test);
-  for(i=0; i<100; i++) {
-    bwputc(COM2, reply[i]);
-  }
+
+void consumer() {
+  int longMessage[16] = {0};
+  int longReply[16] = {0};
+  int shortMessage = 0;
+  int shortReply = 0;
+  int tid;
+
+  Receive(&tid, (char *)longMessage, 64);
+  Reply(tid, (char *)longReply, 64);
+  bwprintf(COM2, "first message received\r");
+  Receive(&tid, (char *)shortMessage, 4);
+  Reply(tid, (char *)shortReply, 64);
+  bwprintf(COM2, "second message recived\r");
+  Receive(&tid, (char *)longMessage, 64);
+  Reply(tid, (char *)longReply, 64);
+  bwprintf(COM2, "third message received\r");
+  Receive(&tid, (char *)shortMessage, 4);
+  Reply(tid, (char *)shortReply, 64);
+  bwprintf(COM2, "fourth message recived\r");
   Exit();
 }
 
-void consumer() {
-  char msg[100];
-  int id;
-  char test[10];
-  int i;
-  for(i=0; i<9; i++) {
-    test[i] = '2';
-  }
-  for(i=0; i<100; i++) {
-    msg[i] = '*';
-  }
-  test[9] = '\0';
-  Receive(&id, msg, 10);
-  msg[9] = '\0';
-  bwprintf(COM2, "received message \"%s\" from task %d\r", msg, id);
-  Reply(id, "This is a very long reply", 26);
-  bwprintf(COM2, "send reply, and test is \"%s\"\r", test);
-  for(i=0; i<100; i++) {
-    bwputc(COM2, msg[i]);
-  }
+void producer_high() {
+  int longMessage[16] = {0};
+  int longReply[16] = {0};
+  int shortMessage = 0;
+  int shortReply = 0;
+
+  int startTime = getClockTick();
+  Send(2, (char *)longMessage, 64, (char *)longReply, 64);
+  int endTime = getClockTick();
+  int diff = startTime - endTime;
+  if(diff < 0) diff += 508000;
+  bwprintf(COM2, "64-byte(send first) test: %d ticks\r", diff);
+
+  startTime = getClockTick();
+  Send(2, (char *)shortMessage, 4, (char *)shortReply, 4);
+  endTime = getClockTick();
+  diff = startTime - endTime;
+  if(diff < 0) diff += 508000;
+  bwprintf(COM2, "4-byte(send first) test: %d ticks\r", diff);
   Exit();
 }
-void regger(){
-	//Registers with the nameserver
-	RegisterAs("RPS Server");		
+
+void producer_low() {
+  int longMessage[16] = {0};
+  int longReply[16] = {0};
+  int shortMessage = 0;
+  int shortReply = 0;
+
+  int startTime = getClockTick();
+  Send(2, (char *)longMessage, 64, (char *)longReply, 64);
+  int endTime = getClockTick();
+  int diff = startTime - endTime;
+  if(diff < 0) diff += 508000;
+  bwprintf(COM2, "64-byte(receive first) test: %d ticks\r", diff);
+
+  startTime = getClockTick();
+  Send(2, (char *)shortMessage, 4, (char *)shortReply, 4);
+  endTime = getClockTick();
+  diff = startTime - endTime;
+  if(diff < 0) diff += 508000;
+  bwprintf(COM2, "4-byte(receive first) test: %d ticks\r", diff);
+  Exit();
 }
-void reqqer(){
-	char* who = "RPS Server";
-	char ret[100];
-	bwprintf(COM2, "Starting client\r");
-	whoIs(who);
-	if(ret == '\0') bwprintf(COM2, "nothing found\r");
-}
+
 void firstTask() {
- // Create(0, producer);
-  //Create(0, consumer);
-  Create(2, NSInit);
-  Create(5, regger);
-  Create(5, reqqer);
-  Pass();
-  Exit();
+  clockInit();
+  Create(0, producer_low);
+  Create(1, consumer);
+  Create(2, producer_high);
+  Exit(); 
 }
