@@ -1,6 +1,9 @@
 #include <bwio.h>
 #include <syscall.h>
 #include <nameServer.h>
+#include <prng.h>
+#include <clock.h>
+
 struct msg{
 	int control;
 	int message;
@@ -65,19 +68,18 @@ void Server(){
 	int tie = 3;
 	int src, playRequest = -1;
 	struct msg in;
-	bwprintf(COM2, "Starting server\r");
+
+	seed(getClockTick());
+
 	RegisterAs(who);
-	bwprintf(COM2, "PASSING:\r");		
 	while (1){
 		Receive(&src, (char*) &in, sizeof(struct msg));
 		switch(in.control){
 		  case 0:
-		  	bwprintf(COM2, "RPSServer: Register\r");
 			if (playRequest == -1) playRequest = in.message;
 			else{
 				Reply(playRequest, 0, sizeof(int));
 				Reply(in.message, 0, sizeof(int));
-				bwprintf(COM2, "RPSServer: Matching tids %d:%d", playRequest, in.message);
 				playerTable[playRequest] = in.message;
 				playerTable[in.message] = playRequest;
 				playRequest = -1;
@@ -88,12 +90,12 @@ void Server(){
 			//	R:0
 			//	P:1
 			//	S:2
-			bwprintf(COM2, "RPSServer: Play\r");
-			if (playerMove[playerTable[src]] == -1){//Opponent has not moved yet
+			if(playerTable[src] == -1) {
+				Reply(src, (char *)&quit, sizeof(int));
+			}else if (playerMove[playerTable[src]] == -1){//Opponent has not moved yet
 				playerMove[src] = in.message;
 			}
 			else{
-				bwprintf(COM2, "both players have made their moves\r");
 				if (playerMove[playerTable[src]] == in.message){
 					Reply(src, (char*)&tie, sizeof(int));
 					Reply(playerTable[src], (char*)&tie, sizeof(int));
@@ -112,9 +114,13 @@ void Server(){
 			break;
 		  case 2:
 			if (playerTable[src] != -1){
-				bwprintf(COM2, "RPSServer: Quit\r");
-				Send(playerTable[src], (char*)&quit,sizeof(int), (char*)&in, sizeof(struct msg));
+				Reply(src, (char *)&quit, sizeof(int));
+				if(playerMove[playerTable[src]] != -1) {
+					Reply(playerTable[src], (char *)&quit, sizeof(int));
+				}
 				playerTable[playerTable[src]] = -1;
+			}else{
+				Reply(src, (char *)&quit, sizeof(int));
 			}
 		}
 	}
@@ -125,20 +131,31 @@ void Client(){
 	char* who = "RPS Server";
 	struct msg out;
 	int ret = -1;
-	bwprintf(COM2, "Starting client\r");
 	RPSserver = whoIs(who);
 	out.control = 0;	//Tells the server we want to register
 	out.message = MyTid(); 
 	Send(RPSserver,  (char*)&out, sizeof(struct msg), (char *) &ret, sizeof(int));
 	out.control = 1;
-	int move = 0;
+	int move;
 	for (i = 0; i < MyTid() + 12; i++){
 		//1 -	Win
 		//0 -	Loss
-		if (ret == 2)break;
+		move = random() % 2;
+		switch(move) {
+		  case 0:
+			bwprintf(COM2, "%d: Playing rock\r", MyTid());
+			break;
+		  case 1:
+			bwprintf(COM2, "%d: Playing paper\r", MyTid());
+			break;
+		  case 2:
+			bwprintf(COM2, "%d: Playing Scissors\r", MyTid());
+			break;
+		}
 		out.message = move;	
 		Send(RPSserver, (char*)&out, sizeof(struct msg), (char *) &ret, sizeof(int)); 
 		if (ret == 3) bwprintf(COM2, "%d: We Tie\r", MyTid());
+		else if(ret == 2) break;
 		else if (ret) bwprintf(COM2, "%d: I Win\r", MyTid());
 		else if (!ret) bwprintf(COM2, "%d: I Lose\r", MyTid());
 		
@@ -146,7 +163,7 @@ void Client(){
 	}
 	out.control = 2;
 	Send(RPSserver, (char*)&out, sizeof(struct msg), (char *) &ret, sizeof(int));
-	bwprintf(COM2, "%d: Quitting", MyTid());
+	Exit();
 }
 void firstTask() {
  // Create(0, producer);
