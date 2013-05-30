@@ -11,7 +11,7 @@
 struct msg
 {
 	int control;
-	char* message;
+	char message[100];
 };
 typedef struct e_struct entry;
 
@@ -28,13 +28,13 @@ int RegisterAs (char* task){
 //-1 if the nameserver tid is invalid
 //-2 if the nameserver tid is not the nameserver
 //0 success
-	bwprintf(COM2, "regas\r");
+	bwprintf(COM2, "Registering Server: %s\r", task);
 	struct msg snd;
 	int ret;
 	snd.control = 0;
 	memcpy(snd.message, task, strlen(task));
 	Send(1, (char*)&snd, sizeof(struct msg), (char *) &ret, sizeof(int));	
-	bwprintf(COM2, "RETURNED: %d\r", ret);
+	bwprintf(COM2, "RegisterAs: RETURNED: %c\r", ret);
 	return 0;	
 
 }
@@ -46,7 +46,7 @@ int whoIs(char* task){
 	memcpy(snd.message, task, strlen(task));
 	Send(1, (char*)&snd, sizeof(struct msg), (char *) &ret, sizeof(int));	
 	bwprintf(COM2, "RETURNED: %d\r", ret);
-return 0;	
+	return ret;	
 }
 
 void NSInit(){
@@ -57,32 +57,30 @@ void NSInit(){
 		Table[i].name[0] = '\0';
 	}
 	int src;
-	char msgbuf[sizeof(struct msg)];
-	struct msg* in;
+	struct msg in;
 	int  ret;
 	while(1){
 		bwprintf(COM2, "NS:WAITING\r");
-		Receive(&src, msgbuf, sizeof(struct msg));
-		bwprintf(COM2, "NS:UP\r");
-		in = (struct msg*)msgbuf;	
-		bwprintf(COM2, "NS:RECEIVED: %d\r", in->control);
-		switch (in->control){
+		Receive(&src, (char *) &in, sizeof(struct msg));
+		switch (in.control){
 		  case 0:
-			insert(msgbuf, src, Table);
+			bwprintf(COM2, "NS:Inserting: %s\r", in.message);
+			insert(in.message, src, Table);
+			bwprintf(COM2, "NS:Inserted\r");
 			Reply(src, "0", sizeof(2));
-		
-		case 1: 
-			bwprintf(COM2, "Retreving: %s\r", in->message);
-			ret = retrieve(msgbuf, Table);
-			
-			bwprintf(COM2, "Replying\r");
+			break;
+		  case 1: 
+			bwprintf(COM2, "NS:Retreving: %s\r", in.message);
+			ret = retrieve(in.message, Table);
+			bwprintf(COM2, "NS:Replying: %d\r", ret);
 			Reply(src, (char *)&ret, sizeof(int));		
 		}	
 	}
 }
 void insert(char* name, int TID, entry* table){
 	int i = 0;
-	while(table[i].name != '\0'){
+	bwprintf(COM2, "Inserting %s\r", name);
+	while(table[i].name[0] != '\0'){//Look at later
 		if (strcomp(table[i].name, name, strlen(name)) == 0){
 			table[i].TID = TID;
 			return;
@@ -90,17 +88,18 @@ void insert(char* name, int TID, entry* table){
 		i++;
 	}
 	strcp(table[i].name, name, strlen(name));
+	table[i].TID = TID;
 }
 int  retrieve(char* name, entry* table){
-	bwprintf(COM2, "IN ret\r");
-	int i =0;
+	bwprintf(COM2, "Retrieving: %s\r", name);
+	int i = 0;
 	while (table[i].name[0] != '\0'){
 		if (strcomp(table[i].name, name, strlen(name)) == 0){
-		bwprintf(COM2, "RETURNING\r");
+		bwprintf(COM2, "RETURNING: %d\r", table[i].TID);
 		 return table[i].TID;
 		}
 	}
-	bwprintf(COM2, "RETURNING2\r");
-	return 0; //TODO fx me
+	bwprintf(COM2, "RETURNING: -1\r");
+	return -1;
 }
 
