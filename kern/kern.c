@@ -116,7 +116,6 @@ void handle(struct Request *request) {
       active = getNextTask();
       break;
     case 5:				//Send
-	bwprintf(COM2, "MARK1\r");
       if(request->arg1 >= MAXTASKS) {			//impossible TID
 	*(active->SP) = -1;
 	makeTaskReady(active);
@@ -128,13 +127,10 @@ void handle(struct Request *request) {
 	*(active->SP) = -3;
 	makeTaskReady(active);
       }else if(taskArray[request->arg1].state == SND_BL) {
-	bwprintf(COM2, "MARK2\r");
         struct Task *receiverTask = &taskArray[request->arg1];
-	bwprintf(COM2, "MARK3\r");
         memcpy(receiverTask->messageBuffer, (char *)request->arg2, 
 		MIN(receiverTask->messageLength, request->arg3));
-	bwprintf(COM2, "SEND: HELLO\r");
-	*(receiverTask->senderTid) = 0; //active->ID;  //Crashing here...
+	*(receiverTask->senderTid) = active->ID;
 	*(receiverTask->SP) = request->arg3;
 	makeTaskReady(receiverTask);
         active->state = RPL_BL;
