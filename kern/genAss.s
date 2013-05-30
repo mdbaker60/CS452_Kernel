@@ -72,3 +72,16 @@ __syscall_enter_arguments_bottom__:
 	bne	__syscall_enter_arguments_top__
 	mov	pc, lr
 	.size	syscall_enter, .-syscall_enter
+	.align	2
+	.global	enableCache
+	.type	enableCache, %function
+enableCache:
+	mrc	p15, 0, r1, c1, c0, 0
+	orr	r1, r1, #0x4
+	orr	r1, r1, #0x1000
+	mov	r0, #0
+	mcr	p15, 0, r0, c5, c0, 0
+	mcr	p15, 0, r0, c6, c0, 0
+	mcr	p15, 0, r1, c1, c0, 0
+	mov	pc, lr
+	.size	enableCache, .-enableCache

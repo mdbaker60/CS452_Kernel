@@ -21,6 +21,9 @@ int main() {
   readyQueue = &kreadyQueue;
   taskArray = ktaskArray;
 
+  //turn on the caches
+  enableCache();
+
   //initialize all tasks's tids to -1
   //so we can identify if they have been
   //created later
@@ -201,21 +204,4 @@ struct Task *getNextTask() {
 void makeTaskReady(struct Task *task) {
   task->state = READY;
   enqueue(readyQueue, task, task->priority);
-}
-
-char *memcpy(char *destination, const char *source, int num) {
-  if(((int)destination & 3) == ((int)source & 3)) {	//same word alignment
-    return memcpy_aligned(destination, source, num);
-  }
-
-  int i;
-  void *retVal = destination;
-  if(num > 0) {
-    *destination = *source;
-  }
-  for(i=1; i<num; i++) {
-    *++destination = *++source;
-  }
-
-  return retVal;
 }

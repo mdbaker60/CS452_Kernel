@@ -10,6 +10,7 @@
 #define MAXTASKS 100
 
 int *getSP();
+void enableCache();
 int Create_sys(int priority, void (*code)());
 void syscall_enter();
 void getNextRequest(struct Task *task, struct Request *request);

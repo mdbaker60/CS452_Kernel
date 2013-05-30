@@ -1,7 +1,7 @@
 XCC = gcc
 AS = as
 LD = ld
-CFLAGS = -c -fPIC -Wall -Ilib/include -Ikern/include -Iuser/include -mcpu=arm920t -msoft-float
+CFLAGS = -c -O2 -fPIC -Wall -Ilib/include -Ikern/include -Iuser/include -mcpu=arm920t -msoft-float
 
 ASFLAGS = -mcpu=arm920t -mapcs-32
 
