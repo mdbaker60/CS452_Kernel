@@ -7,7 +7,7 @@ int strlen(char* str){
 	int ret = 0;
 
 	while (str[ret] != '\0') ret++;
-	return ret; 
+	return ret+1; 
 }
 
 int strcomp(char* str1, char* str2, int strlen){
