@@ -43,7 +43,7 @@ int main() {
 
   //create the first user task
   active = NULL;
-  Create_sys(1, firstTask);
+  Create_sys(7, firstTask);
   active = dequeue(readyQueue);
   active->state = ACTIVE;
 

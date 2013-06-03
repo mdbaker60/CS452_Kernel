@@ -10,50 +10,6 @@ struct msg{
 
 };
 
-
-void producer() {
-  char reply[100];
-  char test[10];
-  int i;
-  for(i=0; i<9; i++) {
-    test[i] = '1';
-  }
-  for(i=0; i<100; i++) {
-    reply[i] = '*';
-  }
-  test[9] = '\0';
-  Send(2, "This message is waaaaay too long!", 34, reply, 10);
-  reply[9] = '\0';
-  bwprintf(COM2, "received reply \"%s\" and test is \"%s\"\r", reply, test);
-  for(i=0; i<100; i++) {
-    bwputc(COM2, reply[i]);
-  }
-  Exit();
-}
-
-void consumer() {
-  char msg[100];
-  int id;
-  char test[10];
-  int i;
-  for(i=0; i<9; i++) {
-    test[i] = '2';
-  }
-  for(i=0; i<100; i++) {
-    msg[i] = '*';
-  }
-  test[9] = '\0';
-  Receive(&id, msg, 10);
-  msg[9] = '\0';
-  bwprintf(COM2, "received message \"%s\" from task %d\r", msg, id);
-  Reply(id, "This is a very long reply", 26);
-  bwprintf(COM2, "send reply, and test is \"%s\"\r", test);
-  for(i=0; i<100; i++) {
-    bwputc(COM2, msg[i]);
-  }
-  Exit();
-}
-
 void Server(){
 	int j;
 	int playerTable[100];
@@ -69,6 +25,7 @@ void Server(){
 	int src, playRequest = -1;
 	struct msg in;
 
+	clockInit();
 	seed(getClockTick());
 
 	RegisterAs(who);
@@ -78,8 +35,9 @@ void Server(){
 		  case 0:
 			if (playRequest == -1) playRequest = in.message;
 			else{
-				Reply(playRequest, 0, sizeof(int));
-				Reply(in.message, 0, sizeof(int));
+				bwprintf(COM2, "\rTask %d playing against task %d\r\r", playRequest, in.message);
+				Reply(playRequest, (char *)&win, sizeof(int));
+				Reply(in.message, (char *)&win, sizeof(int));
 				playerTable[playRequest] = in.message;
 				playerTable[in.message] = playRequest;
 				playRequest = -1;
@@ -99,13 +57,11 @@ void Server(){
 				if (playerMove[playerTable[src]] == in.message){
 					Reply(src, (char*)&tie, sizeof(int));
 					Reply(playerTable[src], (char*)&tie, sizeof(int));
-				}else if ((playerMove[playerTable[src]] == 2 && in.message == 0)|| !(in.message == 2 && playerMove[playerTable[src]] == 0) 
-				   || in.message > playerMove[src]){
+				}else if ((playerMove[playerTable[src]] == 2 && in.message == 0)|| (playerMove[playerTable[src]] == 1 && in.message == 2)
+				   || (playerMove[playerTable[src]] == 0 && in.message == 1)){
 					Reply(src, (char*)&win, sizeof(int));
 					Reply(playerTable[src], (char*)&loss, sizeof(int));
-				}
-				else{
-					
+				}else{
 					Reply(src, (char *)&loss, sizeof(int));
 					Reply(playerTable[src], (char *)&win, sizeof(int));
 				}
@@ -114,11 +70,11 @@ void Server(){
 			break;
 		  case 2:
 			if (playerTable[src] != -1){
+				playerTable[playerTable[src]] = -1;
 				Reply(src, (char *)&quit, sizeof(int));
 				if(playerMove[playerTable[src]] != -1) {
 					Reply(playerTable[src], (char *)&quit, sizeof(int));
 				}
-				playerTable[playerTable[src]] = -1;
 			}else{
 				Reply(src, (char *)&quit, sizeof(int));
 			}
@@ -136,12 +92,14 @@ void Client(){
 	out.message = MyTid(); 
 	Send(RPSserver,  (char*)&out, sizeof(struct msg), (char *) &ret, sizeof(int));
 	out.control = 1;
-	int move;
-	for (i = 0; i < MyTid() + 12; i++){
+	for (i = 0; i < random() % 4 + 2; i++){
 		//1 -	Win
 		//0 -	Loss
-		move = random() % 2;
-		switch(move) {
+		out.message = random() % 3;
+
+		Send(RPSserver, (char*)&out, sizeof(struct msg), (char *) &ret, sizeof(int)); 
+		if(ret == 2) break;
+		switch(out.message) {
 		  case 0:
 			bwprintf(COM2, "%d: Playing rock\r", MyTid());
 			break;
@@ -152,10 +110,11 @@ void Client(){
 			bwprintf(COM2, "%d: Playing Scissors\r", MyTid());
 			break;
 		}
-		out.message = move;	
-		Send(RPSserver, (char*)&out, sizeof(struct msg), (char *) &ret, sizeof(int)); 
+
+		bwgetc(COM2);
+		Pass();
+
 		if (ret == 3) bwprintf(COM2, "%d: We Tie\r", MyTid());
-		else if(ret == 2) break;
 		else if (ret) bwprintf(COM2, "%d: I Win\r", MyTid());
 		else if (!ret) bwprintf(COM2, "%d: I Lose\r", MyTid());
 		
@@ -168,8 +127,10 @@ void Client(){
 void firstTask() {
  // Create(0, producer);
   //Create(0, consumer);
-  Create(2, NSInit);
-  Create(5, Server);
+  Create(7, NSInit);
+  Create(6, Server);
+  Create(5, Client);
+  Create(5, Client);
   Create(5, Client);
   Create(5, Client);
   Exit();

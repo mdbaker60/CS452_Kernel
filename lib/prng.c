@@ -1,6 +1,8 @@
 #include <prng.h>
 
-static int next = 0;
+#include <bwio.h>
+
+static int next;
 
 void seed(int newSeed) {
   next = newSeed;
