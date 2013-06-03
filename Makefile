@@ -60,4 +60,4 @@ bin/userTasks.o: bin/userTasks.s
 
 bin/kern_a2.elf: bin/kern.o bin/userTasks.o bin/queue.o bin/nameServer.o bin/string.o bin/clock.o bin/prng.o
 	$(LD) $(LDFLAGS) -o bin/kern_a2.elf bin/string.o bin/kern.o bin/queue.o bin/nameServer.o bin/userTasks.o bin/clock.o bin/prng.o -lbwio -lgcc
-	cp bin/kern_a2.elf /u/cs452/tftp/ARM/djgroot/kern_a2.elf
+	cp bin/kern_a2.elf /u/cs452/tftp/ARM/djgroot/kern_a3.elf

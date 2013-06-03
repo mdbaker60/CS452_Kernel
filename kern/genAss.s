@@ -7,6 +7,19 @@ getSP:
 	mov	pc, lr
 	.size	getSP, .-getSP
 	.align	2
+	.global	setIRQ_SP
+	.type 	setIRQ_SP, %function	
+setIRQ_SP:
+	mrs	ip, cpsr
+	bic	ip, ip, #0x1F
+	orr	ip, ip, #0x12
+	msr	cpsr_c, ip
+	mov	sp, r0
+	orr	ip, ip, #0x13
+	msr	cpsr_c, ip
+	mov	pc, lr
+	.size	setIRQ_SP, .-setIRQ_SP
+	.align	2
 	.global	getNextRequest
 	.type	getNextRequest, %function
 getNextRequest:
@@ -25,8 +38,50 @@ getNextRequest:
 	bic	ip, ip, #0x1F
 	orr	ip, ip, #0x13
 	msr	cpsr_c, ip
+	ldr	ip, [sp, #-4]
 	movs	pc, lr
 	.size	getNextRequest, .-getNextRequest
+	.align	2
+	.global	int_enter
+	.type	int_enter, %function
+int_enter:
+	str	ip, [sp, #-4]
+	mrs	ip, cpsr
+	orr	ip, ip, #0x1F
+	msr	cpsr_c, ip
+	mov	ip, sp
+	sub	sp, sp, #4
+	stmfd	sp!, {r0 - r10, fp, ip, lr}
+	mrs	r0, cpsr
+	bic	r0, r0, #0x1F
+	orr	r0, r0, #0x12
+	msr	cpsr_c, r0
+	ldr	ip, [sp, #-4]
+	orr	r0, r0, #0x1F
+	msr	cpsr_c, r0
+	str	ip, [sp, #56]
+	mov	r2, sp
+	mrs	ip, cpsr
+	bic	ip, ip, #0x1F
+	orr	ip, ip, #0x13
+	msr	cpsr_c, ip
+	ldmfd	sp, {r0, r1, r4 - r10, fp, sp, lr}
+	str	r2, [r0]
+	mrs	ip, cpsr
+	bic	ip, ip, #0x1F
+	orr	ip, ip, #0x12
+	msr	cpsr_c, ip
+	mrs	r2, spsr
+	str	r2, [r0, #4]
+	str	lr, [r0, #8]
+	mrs	ip, cpsr
+	bic	ip, ip, #0x1F
+	orr	ip, ip, #0x13
+	msr	cpsr_c, ip
+	mov	ip, #0
+	str	ip, [r1]
+	mov	pc, lr
+	.size	int_enter, .-int_enter
 	.align	2
 	.global syscall_enter
 	.type	syscall_enter, %function
@@ -36,6 +91,7 @@ syscall_enter:
 	orr	ip, ip, #31
 	msr	cpsr_c, ip
 	mov	ip, sp
+	sub	sp, sp, #4
 	stmfd	sp!, {r0 - r10, fp, ip, lr}
 	mov	r2, sp
 	mrs	ip, cpsr

@@ -5,6 +5,11 @@
 #include <userTasks.h>
 #include <queue.h>
 #include <mem.h>
+
+//TODO remove
+#include <ts7200.h>
+static int *clockClear;
+
 static int *freeMemStart;
 static int *kernMemStart;
 static int nextTID;
@@ -13,6 +18,10 @@ static struct PriorityQueue *readyQueue;
 static struct Request *activeRequest;
 static struct Task *taskArray;
 
+void print() {
+  bwprintf(COM2, "test\r");
+}
+
 int main() {
   struct Request kactiveRequest;
   struct PriorityQueue kreadyQueue;
@@ -20,6 +29,15 @@ int main() {
   activeRequest = &kactiveRequest; 
   readyQueue = &kreadyQueue;
   taskArray = ktaskArray;
+
+  //TODO remove
+  int *clockControl = (int *)(TIMER3_BASE + CRTL_OFFSET);
+  int *clockLoad = (int *)(TIMER3_BASE + LDR_OFFSET);
+  clockClear = (int *)(TIMER3_BASE + CLR_OFFSET);
+  int *intControl = (int *)0x800C0010;
+  *intControl = 0x80000;
+  *clockLoad = 507999;
+  *clockControl = ENABLE_MASK | MODE_MASK | CLKSEL_MASK;
 
   //turn on the caches
   enableCache();
@@ -33,10 +51,13 @@ int main() {
   }
 
   *((int *)0x28) = (int)syscall_enter;
+  *((int *)0x38) = (int)int_enter;
   nextTID = 0;
   kernMemStart = getSP();
   //leave 250KB of stack space for function calls
   kernMemStart -= 0xFA00;
+  setIRQ_SP((int)kernMemStart);
+  kernMemStart -= 0x10;		//give IRQ stack 8 words of space
 
   initQueue(readyQueue);
   freeMemStart = kernMemStart;
@@ -48,6 +69,7 @@ int main() {
   active->state = ACTIVE;
 
   while(active != NULL) {
+    bwprintf(COM2, "running task %d at address 0x%x, and stack at 0x%x\r", active->ID, active->returnAddress, active->SP);
     getNextRequest(active, activeRequest);
     handle(activeRequest);
   }
@@ -66,7 +88,7 @@ int Create_sys(int priority, void (*code)()) {
   //initialize user task context
   newTD->SP = freeMemStart-56;		//loaded during user task schedule
   newTD->ID = nextTID++;
-  newTD->SPSR = 0xD0;
+  newTD->SPSR = 0x50;
   if(active == NULL) {
     newTD->parentID = -1;
   }else{
@@ -87,7 +109,13 @@ int Create_sys(int priority, void (*code)()) {
 
 void handle(struct Request *request) {
   switch(request->ID) {
-    case 0:					//Create
+    case 0:					//IRQ
+      *clockClear = 0;
+      bwprintf(COM2, "100 ticks passed\r");
+      makeTaskReady(active);
+      active = getNextTask();
+      break;
+    case 1:					//Create
       if((int *)request->arg2 >= freeMemStart) {	//code pointer on the stack
         *(active->SP) = -3;
       }else if(request->arg1 >= NUMPRIO || request->arg1 < 0) {	//invalid priority
@@ -100,21 +128,22 @@ void handle(struct Request *request) {
       makeTaskReady(active);
       active = getNextTask();
       break;
-    case 1:				//MyTid
+    case 2:				//MyTid
       *(active->SP) = active->ID;
       makeTaskReady(active);
       active = getNextTask();
       break;
-    case 2:				//MyParentTid
+    case 3:				//MyParentTid
       *(active->SP) = active->parentID;
       makeTaskReady(active);
       active = getNextTask();
       break;
-    case 3:				//Pass
+    case 4:				//Pass
       makeTaskReady(active);
       active = getNextTask();
       break;
-    case 4:				//Exit
+    case 5:				//Exit
+      bwprintf(COM2, "task %d has exited\r", active->ID);
       //pop the send queue, returning -3
       while(active->sendQHead != NULL) {
         struct Task *queuedTask = active->sendQHead;
@@ -126,7 +155,7 @@ void handle(struct Request *request) {
       active->state = ZOMBIE;
       active = getNextTask();
       break;
-    case 5:				//Send
+    case 6:				//Send
       if(request->arg1 >= MAXTASKS) {			//impossible TID
 	*(active->SP) = -1;
 	makeTaskReady(active);
@@ -163,7 +192,7 @@ void handle(struct Request *request) {
       }
       active = getNextTask();
       break;
-    case 6:				//Receive
+    case 7:				//Receive
       if(active->sendQHead == NULL) {	//No tasks have sent
         active->state = SND_BL;
         active->messageBuffer = (char *)request->arg2;
@@ -182,7 +211,7 @@ void handle(struct Request *request) {
       }
       active = getNextTask();
       break;
-    case 7:				//Reply
+    case 8:				//Reply
       if(request->arg1 >= MAXTASKS) {
 	*(active->SP) = -1;
       }else if(taskArray[request->arg1].ID == -1 || taskArray[request->arg1].state == ZOMBIE) {
