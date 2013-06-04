@@ -5,10 +5,7 @@
 #include <userTasks.h>
 #include <queue.h>
 #include <mem.h>
-
-//TODO remove
 #include <ts7200.h>
-static int *clockClear;
 
 static int *freeMemStart;
 static int *kernMemStart;
@@ -32,11 +29,10 @@ int main() {
   //initialize clock
   int *clockControl = (int *)(TIMER3_BASE + CRTL_OFFSET);
   int *clockLoad = (int *)(TIMER3_BASE + LDR_OFFSET);
-  clockClear = (int *)(TIMER3_BASE + CLR_OFFSET);
   *clockLoad = 5079;
   *clockControl = ENABLE_MASK | MODE_MASK | CLKSEL_MASK;
   //turn on clock interrupts
-  int *intControl = (int *)(ICU2_BASE + EN_OFFSET);
+  int *intControl = (int *)(ICU2_BASE + ENBL_OFFSET);
   *intControl = CLK3_MASK;
 
   //turn on the caches
@@ -113,8 +109,7 @@ int Create_sys(int priority, void (*code)()) {
 void handle(struct Request *request) {
   switch(request->ID) {
     case INTERRUPT:
-      *clockClear = 0;
-      bwprintf(COM2, "100 ticks passed\r");
+      handleInterrupt();
       makeTaskReady(active);
       active = getNextTask();
       break;
@@ -255,3 +250,15 @@ void makeTaskReady(struct Task *task) {
   enqueue(readyQueue, task, task->priority);
 }
 
+void handleInterrupt() {
+  int *status = (int *)(ICU2_BASE + STAT_OFFSET);
+  if((int)status | CLK3_MASK) {
+    int *clockClear = (int *)(TIMER3_BASE + CLR_OFFSET);
+    *clockClear = 0;
+    if(waitingTasks[CLOCK_EVENT] != NULL) {
+      *(waitingTasks[CLOCK_EVENT]->SP) = 0;
+      makeTaskReady(waitingTasks[CLOCK_EVENT]);
+      waitingTasks[CLOCK_EVENT] = NULL;
+    }
+  }
+}
