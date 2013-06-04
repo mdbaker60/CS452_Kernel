@@ -38,14 +38,7 @@ struct Task *dequeue(struct PriorityQueue *queue) {
     (queue->head)[queue->highPriority] = (queue->tail)[queue->highPriority] = NULL;
 
     queue->availablePriorities &= ~(1 << queue->highPriority);
-    int t, tt;	//temporaries
-    queue->highPriority = 0;
-    if((tt = queue->availablePriorities >> 16)) {
-      queue->highPriority = (t = tt >> 8) ? 24 + LogTable256[t] : 16 + LogTable256[tt];
-    }else{
-      queue->highPriority = (t = queue->availablePriorities >> 8) 
-		? LogTable256[t] : LogTable256[queue->availablePriorities];
-    }
+    queue->highPriority = LogTable256[queue->availablePriorities];
   }
 
   retVal->next = NULL;

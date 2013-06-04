@@ -1,3 +1,4 @@
+#include <userTasks.h>
 #include <clockServer.h>
 #include <nameServer.h>
 #include <syscall.h>
@@ -16,17 +17,6 @@ struct Message {
   int ticks;
 };
 
-void ClockHelper() {
-  int clockServer = MyParentTid();
-  struct Message msg;
-  int reply;
-  msg.type = 0;			//clock ticked
-  while(true) {
-    AwaitEvent(0);
-    Send(clockServer, (char *)&msg, sizeof(struct Message), (char *)&reply, sizeof(int));
-  }
-}
-
 void CSInit() {
   struct Message msg;
   int reply;
@@ -40,14 +30,16 @@ void CSInit() {
     waitingTasks[i].ID = i;
   }
 
-  Create(7, ClockHelper);
+  int notifierTid = Create(7, notifier);
+  int eventType = CLOCK_EVENT;
+  Send(notifierTid, (char *)&eventType, sizeof(int), (char *)&reply, sizeof(int));
   RegisterAs("Clock Server");
   
   struct WaitingTask *tempTask;
   while(true) {
     Receive(&src, (char *)&msg, sizeof(struct Message));
     switch(msg.type) {
-      case 0:	//clock ticked
+      case 0:		//from notifier
 	++ticks;
 	Reply(src, (char *)&reply, sizeof(int));
 	tempTask = head;
