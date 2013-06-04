@@ -18,10 +18,6 @@ static struct PriorityQueue *readyQueue;
 static struct Request *activeRequest;
 static struct Task *taskArray;
 
-void print() {
-  bwprintf(COM2, "test\r");
-}
-
 int main() {
   struct Request kactiveRequest;
   struct PriorityQueue kreadyQueue;
@@ -69,7 +65,6 @@ int main() {
   active->state = ACTIVE;
 
   while(active != NULL) {
-    bwprintf(COM2, "running task %d at address 0x%x, and stack at 0x%x\r", active->ID, active->returnAddress, active->SP);
     getNextRequest(active, activeRequest);
     handle(activeRequest);
   }
@@ -143,7 +138,6 @@ void handle(struct Request *request) {
       active = getNextTask();
       break;
     case 5:				//Exit
-      bwprintf(COM2, "task %d has exited\r", active->ID);
       //pop the send queue, returning -3
       while(active->sendQHead != NULL) {
         struct Task *queuedTask = active->sendQHead;

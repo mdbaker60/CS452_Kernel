@@ -73,6 +73,7 @@ int_enter:
 	msr	cpsr_c, ip
 	mrs	r2, spsr
 	str	r2, [r0, #4]
+	sub	lr, lr, #4
 	str	lr, [r0, #8]
 	mrs	ip, cpsr
 	bic	ip, ip, #0x1F
