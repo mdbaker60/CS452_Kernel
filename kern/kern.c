@@ -4,7 +4,7 @@
 #include <syscall.h>
 #include <userTasks.h>
 #include <queue.h>
-#include <mem.h>
+#include <memcpy.h>
 #include <ts7200.h>
 
 static int *freeMemStart;

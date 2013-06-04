@@ -1,4 +1,4 @@
-#include <mem.h>
+#include <memcpy.h>
 #include <bwio.h>
 void strcp(char* dest, char* src, int len){
 	memcpy(dest, src, len+1);
