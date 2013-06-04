@@ -5,6 +5,21 @@
 #include <values.h>
 #include <nameServer.h>
 
+struct msg
+{
+  int control;
+  char message[100];
+};
+typedef struct e_struct entry;
+
+struct e_struct
+{
+  char name[100];
+  int TID;	
+};
+
+void insert(char * key, int idx, entry* table);
+int retrieve(char* key,  entry* table);
 
 int RegisterAs (char* task){
 //-1 if the nameserver tid is invalid

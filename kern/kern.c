@@ -6,6 +6,7 @@
 #include <queue.h>
 #include <memcpy.h>
 #include <ts7200.h>
+#include <values.h>
 
 static int numEventBlocked;
 static int *freeMemStart;

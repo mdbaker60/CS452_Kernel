@@ -80,6 +80,7 @@ void CSInit() {
  	}else{
 	  tempTask = &waitingTasks[msg.tid];
 	  tempTask->ticksLeft = msg.ticks;
+	  head->last = tempTask;
 	  tempTask->next = head;
 	  tempTask->last = NULL;
 	  head = tempTask;
