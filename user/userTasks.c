@@ -2,9 +2,10 @@
 #include <syscall.h>
 #include <nameServer.h>
 #include <clockServer.h>
+#include <values.h>
 
 void busyTask() {
-  while(1) Pass();
+  while(true) Pass();
 }
 
 void test() {
@@ -24,7 +25,7 @@ void test() {
 void firstTask() {
   Create(7, NSInit);
   Create(7, CSInit);
-  Create(0, test);
+  Create(1, test);
   Create(0, busyTask);
   Exit();
 }

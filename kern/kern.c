@@ -7,6 +7,7 @@
 #include <memcpy.h>
 #include <ts7200.h>
 
+static int numEventBlocked;
 static int *freeMemStart;
 static int *kernMemStart;
 static int nextTID;
@@ -25,6 +26,7 @@ int main() {
   readyQueue = &kreadyQueue;
   taskArray = ktaskArray;
   waitingTasks = kwaitingTasks;
+  numEventBlocked = 0;
 
   //initialize clock
   int *clockControl = (int *)(TIMER3_BASE + CRTL_OFFSET);
@@ -68,7 +70,7 @@ int main() {
   active = dequeue(readyQueue);
   active->state = ACTIVE;
 
-  while(active != NULL) {
+  while(!queueEmpty(readyQueue) || numEventBlocked > 0 || active->priority > 0) {
     getNextRequest(active, activeRequest);
     handle(activeRequest);
   }
@@ -228,6 +230,7 @@ void handle(struct Request *request) {
       break;
     case AWAITEVENT:
       if(waitingTasks[request->arg1] == NULL) {
+	++numEventBlocked;
 	waitingTasks[request->arg1] = active;
 	active->state = EVT_BL;
       }else{
@@ -256,6 +259,7 @@ void handleInterrupt() {
     int *clockClear = (int *)(TIMER3_BASE + CLR_OFFSET);
     *clockClear = 0;
     if(waitingTasks[CLOCK_EVENT] != NULL) {
+      --numEventBlocked;
       *(waitingTasks[CLOCK_EVENT]->SP) = 0;
       makeTaskReady(waitingTasks[CLOCK_EVENT]);
       waitingTasks[CLOCK_EVENT] = NULL;
