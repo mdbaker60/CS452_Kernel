@@ -1,7 +1,7 @@
 #ifndef __TASK_H__
 #define __TASK_H__
 
-enum State {READY, ACTIVE, ZOMBIE, RCV_BL, RPL_BL, SND_BL};
+enum State {READY, ACTIVE, ZOMBIE, RCV_BL, RPL_BL, SND_BL, EVT_BL};
 
 struct Task {
   int *SP;

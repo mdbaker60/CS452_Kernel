@@ -71,3 +71,12 @@ Reply:
 	swi	#0x308
 	ldmfd	sp, {sp, pc}
 	.size	Reply, .-Reply
+	.align	2
+	.global	AwaitEvent
+	.type	AwaitEvent, %function
+AwaitEvent:
+	mov	ip, sp
+	stmfd	sp!, {sp, lr}
+	swi	#0x109
+	ldmfd	sp, {sp, pc}
+	.size	AwaitEvent, .-AwaitEvent

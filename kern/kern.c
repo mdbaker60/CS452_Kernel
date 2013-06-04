@@ -17,23 +17,27 @@ static struct Task *active;
 static struct PriorityQueue *readyQueue;
 static struct Request *activeRequest;
 static struct Task *taskArray;
+static struct Task **waitingTasks;
 
 int main() {
   struct Request kactiveRequest;
   struct PriorityQueue kreadyQueue;
   struct Task ktaskArray[MAXTASKS];
+  struct Task *kwaitingTasks[NUMEVENTS];
   activeRequest = &kactiveRequest; 
   readyQueue = &kreadyQueue;
   taskArray = ktaskArray;
+  waitingTasks = kwaitingTasks;
 
-  //TODO remove
+  //initialize clock
   int *clockControl = (int *)(TIMER3_BASE + CRTL_OFFSET);
   int *clockLoad = (int *)(TIMER3_BASE + LDR_OFFSET);
   clockClear = (int *)(TIMER3_BASE + CLR_OFFSET);
-  int *intControl = (int *)0x800C0010;
-  *intControl = 0x80000;
-  *clockLoad = 507999;
+  *clockLoad = 5079;
   *clockControl = ENABLE_MASK | MODE_MASK | CLKSEL_MASK;
+  //turn on clock interrupts
+  int *intControl = (int *)(ICU2_BASE + EN_OFFSET);
+  *intControl = CLK3_MASK;
 
   //turn on the caches
   enableCache();
@@ -44,6 +48,10 @@ int main() {
   int i;
   for(i=0; i<MAXTASKS; i++) {
     taskArray[i].ID = -1;
+  }
+  //initialize all wating tasks to NULL
+  for(i=0; i<NUMEVENTS; i++) {
+    waitingTasks[i] = NULL;
   }
 
   *((int *)0x28) = (int)syscall_enter;
@@ -104,13 +112,13 @@ int Create_sys(int priority, void (*code)()) {
 
 void handle(struct Request *request) {
   switch(request->ID) {
-    case 0:					//IRQ
+    case INTERRUPT:
       *clockClear = 0;
       bwprintf(COM2, "100 ticks passed\r");
       makeTaskReady(active);
       active = getNextTask();
       break;
-    case 1:					//Create
+    case CREATE:
       if((int *)request->arg2 >= freeMemStart) {	//code pointer on the stack
         *(active->SP) = -3;
       }else if(request->arg1 >= NUMPRIO || request->arg1 < 0) {	//invalid priority
@@ -123,21 +131,21 @@ void handle(struct Request *request) {
       makeTaskReady(active);
       active = getNextTask();
       break;
-    case 2:				//MyTid
+    case MYTID:
       *(active->SP) = active->ID;
       makeTaskReady(active);
       active = getNextTask();
       break;
-    case 3:				//MyParentTid
+    case MYPARENTTID:
       *(active->SP) = active->parentID;
       makeTaskReady(active);
       active = getNextTask();
       break;
-    case 4:				//Pass
+    case PASS:
       makeTaskReady(active);
       active = getNextTask();
       break;
-    case 5:				//Exit
+    case EXIT:
       //pop the send queue, returning -3
       while(active->sendQHead != NULL) {
         struct Task *queuedTask = active->sendQHead;
@@ -149,7 +157,7 @@ void handle(struct Request *request) {
       active->state = ZOMBIE;
       active = getNextTask();
       break;
-    case 6:				//Send
+    case SEND:
       if(request->arg1 >= MAXTASKS) {			//impossible TID
 	*(active->SP) = -1;
 	makeTaskReady(active);
@@ -186,7 +194,7 @@ void handle(struct Request *request) {
       }
       active = getNextTask();
       break;
-    case 7:				//Receive
+    case RECEIVE:
       if(active->sendQHead == NULL) {	//No tasks have sent
         active->state = SND_BL;
         active->messageBuffer = (char *)request->arg2;
@@ -205,7 +213,7 @@ void handle(struct Request *request) {
       }
       active = getNextTask();
       break;
-    case 8:				//Reply
+    case REPLY:
       if(request->arg1 >= MAXTASKS) {
 	*(active->SP) = -1;
       }else if(taskArray[request->arg1].ID == -1 || taskArray[request->arg1].state == ZOMBIE) {
@@ -223,6 +231,16 @@ void handle(struct Request *request) {
       makeTaskReady(active);
       active = getNextTask();
       break;
+    case AWAITEVENT:
+      if(waitingTasks[request->arg1] == NULL) {
+	waitingTasks[request->arg1] = active;
+	active->state = EVT_BL;
+      }else{
+        *(active->SP) = -4;
+	makeTaskReady(active);
+      }
+      active = getNextTask();
+      break;
   }
 }
 
@@ -236,3 +254,4 @@ void makeTaskReady(struct Task *task) {
   task->state = READY;
   enqueue(readyQueue, task, task->priority);
 }
+
