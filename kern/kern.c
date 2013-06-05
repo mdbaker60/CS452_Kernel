@@ -139,6 +139,7 @@ int Create_sys(int priority, void (*code)()) {
 }
 
 void handle(struct Request *request) {
+  DEBUGPRINT("handling system call from task %d\r", active->ID);
   switch(request->ID) {
     case INTERRUPT:
       handleInterrupt();
