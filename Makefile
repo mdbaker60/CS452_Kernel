@@ -18,6 +18,7 @@ recursive:
 bin/kern_a3.elf: recursive $(wildcard bin/*.o)
 	$(LD) $(LDFLAGS) -o bin/kern_a3.elf bin/*.o -lbwio -lgcc
 	cp bin/kern_a3.elf /u/cs452/tftp/ARM/djgroot/kern_a3.elf
+	@echo "$(DEBUGFLAGS)"
 
 bin/kern.o:
 	@:

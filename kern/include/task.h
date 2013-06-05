@@ -19,6 +19,7 @@ struct Task {
   int *senderTid;
   struct Task *sendQHead;
   struct Task *sendQTail;
+  int totalTime;
 };
 
 struct Request {
