@@ -15,7 +15,7 @@
 #endif
 
 static int numEventBlocked;
-static int *freeMemStart;
+static int *userStacks;
 static int *kernMemStart;
 static int nextTID;
 static struct Task *active;
@@ -23,6 +23,8 @@ static struct PriorityQueue *readyQueue;
 static struct Request *activeRequest;
 static struct Task *taskArray;
 static struct Task **waitingTasks;
+static struct Task *firstFree;
+static struct Task *lastFree;
 static int totalTime;
 
 int main() {
@@ -58,8 +60,13 @@ int main() {
   //created later
   int i;
   for(i=0; i<MAXTASKS; i++) {
-    taskArray[i].ID = -1;
+    taskArray[i].ID = i;
+    taskArray[i].generation = -1;
+    taskArray[i].next = &taskArray[i+1];
   }
+  firstFree = &taskArray[0];
+  lastFree = &taskArray[MAXTASKS-1];
+  lastFree->next = NULL;
   //initialize all wating tasks to NULL
   for(i=0; i<NUMEVENTS; i++) {
     waitingTasks[i] = NULL;
@@ -75,7 +82,7 @@ int main() {
   kernMemStart -= 0x10;		//give IRQ stack 8 words of space
 
   initQueue(readyQueue);
-  freeMemStart = kernMemStart;
+  userStacks = kernMemStart;
 
   //create the first user task
   active = NULL;
@@ -103,10 +110,14 @@ int main() {
 }
 
 int Create_sys(int priority, void (*code)()) {
-  struct Task *newTD = &taskArray[nextTID];
+  if(firstFree == NULL) return -2;
+  struct Task *newTD = firstFree;
+  firstFree = firstFree->next;
+  newTD->next = NULL;
+  int *myStack = &userStacks[(newTD->ID)*(0xFA00)];
   //initialize user task context
-  newTD->SP = freeMemStart-56;		//loaded during user task schedule
-  newTD->ID = nextTID++;
+  newTD->SP = myStack-56;		//loaded during user task schedule
+  ++(newTD->generation);
   newTD->SPSR = 0x50;
   if(active == NULL) {
     newTD->parentID = -1;
@@ -119,10 +130,9 @@ int Create_sys(int priority, void (*code)()) {
   newTD->next = NULL;
   newTD->sendQHead = NULL;
   newTD->totalTime = 0;
-  *(newTD->SP + 12) = (int)freeMemStart;	//stack pointer
+  *(newTD->SP + 12) = myStack;	//stack pointer
+  DEBUGPRINT("Task %d has been set up at address 0x%x\r", newTD->ID, newTD);
   enqueue(readyQueue, newTD, priority);
-
-  freeMemStart -= 0xFA00;	//give each task 250KB of stack space
 
   return newTD->ID;
 }
@@ -135,12 +145,10 @@ void handle(struct Request *request) {
       active = getNextTask();
       break;
     case CREATE:
-      if((int *)request->arg2 >= freeMemStart) {	//code pointer on the stack
+      if((int *)request->arg2 >= &userStacks[MAXTASKS*(0xFA00)]) {	//code pointer on the stack
         *(active->SP) = -3;
       }else if(request->arg1 >= NUMPRIO || request->arg1 < 0) {	//invalid priority
 	*(active->SP) = -1;
-      }else if(nextTID >= MAXTASKS) {				//out of TDs
-        *(active->SP) = -2;
       }else{
         *(active->SP) = Create_sys(request->arg1, (void (*)())request->arg2);
       }

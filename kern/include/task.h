@@ -8,6 +8,7 @@ struct Task {
   int SPSR;
   int returnAddress;
   int ID;
+  int generation;
   int parentID;
   struct Task *next;
   enum State state;
