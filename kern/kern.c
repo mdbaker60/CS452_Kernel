@@ -92,6 +92,7 @@ int main() {
 
   int startTime, endTime;
   while(!queueEmpty(readyQueue) || numEventBlocked > 0 || active->priority > 0) {
+    DEBUGPRINT("scheduling task %d\r", active->ID);
     startTime = *counterValue;
     getNextRequest(active, activeRequest);
     endTime = *counterValue;
@@ -113,8 +114,7 @@ int Create_sys(int priority, void (*code)()) {
   if(firstFree == NULL) return -2;
   struct Task *newTD = firstFree;
   firstFree = firstFree->next;
-  newTD->next = NULL;
-  int *myStack = &userStacks[(newTD->ID)*(0xFA00)];
+  int *myStack = userStacks + (newTD->ID)*(0xFA00);
   //initialize user task context
   newTD->SP = myStack-56;		//loaded during user task schedule
   ++(newTD->generation);
@@ -130,9 +130,10 @@ int Create_sys(int priority, void (*code)()) {
   newTD->next = NULL;
   newTD->sendQHead = NULL;
   newTD->totalTime = 0;
-  *(newTD->SP + 12) = myStack;	//stack pointer
-  DEBUGPRINT("Task %d has been set up at address 0x%x\r", newTD->ID, newTD);
+  *(newTD->SP + 12) = (int)myStack;	//stack pointer
+  //DEBUGPRINT("Task %d has been set up at address 0x%x\r", newTD->ID, newTD);
   enqueue(readyQueue, newTD, priority);
+  //DEBUGPRINT("Task %d has been added to the ready queue\r", newTD->ID);
 
   return newTD->ID;
 }
@@ -152,8 +153,11 @@ void handle(struct Request *request) {
       }else{
         *(active->SP) = Create_sys(request->arg1, (void (*)())request->arg2);
       }
+      //DEBUGPRINT("Making task ready\r");
       makeTaskReady(active);
+      //DEBUGPRINT("Getting next active task\r");
       active = getNextTask();
+      //DEBUGPRINT("Next active task is %d\r", active->ID);
       break;
     case MYTID:
       *(active->SP) = active->ID;
@@ -179,7 +183,7 @@ void handle(struct Request *request) {
 	makeTaskReady(queuedTask);
       }
       //print out percent time used by this task
-      DEBUGPRINT("Task %d: used %d percent of CPU time\r", active->ID, (100*(active->totalTime))/totalTime);
+      //DEBUGPRINT("Task %d: used %d percent of CPU time\r", active->ID, (100*(active->totalTime))/totalTime);
       active->state = ZOMBIE;
       active = getNextTask();
       break;
@@ -273,7 +277,9 @@ void handle(struct Request *request) {
 
 //scheduling functions
 struct Task *getNextTask() {
+  //DEBUGPRINT("dequeueing\r");
   struct Task *nextTask = dequeue(readyQueue);
+  //DEBUGPRINT("done\r");
   nextTask->state = READY;
   return nextTask;
 }

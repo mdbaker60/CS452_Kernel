@@ -30,6 +30,7 @@ void enqueue(struct PriorityQueue *queue, struct Task *task, int priority) {
 
 struct Task *dequeue(struct PriorityQueue *queue) {
   if(queue->highPriority == LogTable256[0]) return NULL;
+  //bwprintf(COM2, "queue not returned NULL, getting task of priority %d\r", queue->highPriority);
 
   struct Task *retVal = (queue->head)[queue->highPriority];
   if(retVal->next != NULL) {
@@ -40,6 +41,7 @@ struct Task *dequeue(struct PriorityQueue *queue) {
     queue->availablePriorities &= ~(1 << queue->highPriority);
     queue->highPriority = LogTable256[queue->availablePriorities];
   }
+  //bwprintf(COM2, "dequeued task %d of priority %d\r", retVal->ID, retVal->priority);
 
   retVal->next = NULL;
   return retVal;
