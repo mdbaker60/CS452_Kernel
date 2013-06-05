@@ -6,9 +6,9 @@
 
 struct WaitingTask {
   int ID;
-  int ticksLeft;
+  int untilTick;
   struct WaitingTask *next;
-  struct WaitingTask *last;
+  //struct WaitingTask *last;
 };
 
 struct Message {
@@ -25,6 +25,7 @@ void CSInit() {
 
   struct WaitingTask waitingTasks[100];
   struct WaitingTask *head = NULL;
+  struct WaitingTask *last = NULL;
   int i;
   for(i=0; i<100; i++) {
     waitingTasks[i].ID = i;
@@ -39,46 +40,43 @@ void CSInit() {
   while(true) {
     Receive(&src, (char *)&msg, sizeof(struct Message));
     switch(msg.type) {
-      case 0:		//from notifier
+      case NOTIFIER:		//from notifier
 	++ticks;
 	Reply(src, (char *)&reply, sizeof(int));
 	tempTask = head;
-	while(tempTask != NULL) {
-	  --(tempTask->ticksLeft);
-	  if(tempTask->ticksLeft == 0) {
-	    reply = 0;
-	    Reply(tempTask->ID, (char *)&reply, sizeof(int));
-	    if(tempTask->last == NULL && tempTask->next == NULL) {
-	      head = NULL;
-	    }else if(tempTask->last == NULL) {
-	      head = tempTask->next;
-	      (tempTask->next)->last = NULL;
-	    }else if(tempTask->next == NULL) {
-	      (tempTask->last)->next = NULL;
-	    }else{
-	      (tempTask->last)->next = tempTask->next;
-	      (tempTask->next)->last = tempTask->last;
-	    }
-	  }
-	  tempTask = tempTask->next;
-	}
+	while(tempTask != NULL && tempTask->untilTick <= ticks) {
+	  reply = 0;
+	  Reply(tempTask->ID, (char *)&reply, sizeof(int));
+	  
+	  head = tempTask->next;
+	  tempTask->next = NULL;
+	  tempTask = head;
+	} 
 	break;
-      case 1:
-	msg.ticks -= ticks;
-      case 2:	//add waiting task
-	if(msg.ticks <= 0) {
+      case DELAY:
+	msg.ticks += ticks;
+      case DELAYUNTIL:	//add waiting task
+	if(msg.ticks <= ticks) {
 	  reply = 0;
 	  Reply(src, (char *)&reply, sizeof(int));
  	}else{
 	  tempTask = &waitingTasks[msg.tid];
-	  tempTask->ticksLeft = msg.ticks;
-	  head->last = tempTask;
+	  tempTask->untilTick = msg.ticks;
 	  tempTask->next = head;
-	  tempTask->last = NULL;
-	  head = tempTask;
+	  while (tempTask->next != NULL && tempTask->next->untilTick < tempTask->untilTick){
+		if (last != NULL) last->next = tempTask->next;
+		last = tempTask->next;
+	  	tempTask->next = tempTask->next->next;
+	  }
+	  if (tempTask->next == head){
+		head = tempTask;
+	  }else{
+		last->next = tempTask;
+		last = NULL;
+	  }
  	}
 	break;
-      case 3:	//get time
+      case GETTIME:	//get time
 	Reply(src, (char *)&ticks, sizeof(int));
 	break;
     }
