@@ -8,6 +8,12 @@
 #include <ts7200.h>
 #include <values.h>
 
+#ifdef DEBUG
+#define DEBUGPRINT(...) bwprintf(COM2, __VA_ARGS__);
+#else
+#define DEBUGPRINT(...) do {} while(0)
+#endif
+
 static int numEventBlocked;
 static int *freeMemStart;
 static int *kernMemStart;
@@ -17,6 +23,7 @@ static struct PriorityQueue *readyQueue;
 static struct Request *activeRequest;
 static struct Task *taskArray;
 static struct Task **waitingTasks;
+static int totalTime;
 
 int main() {
   struct Request kactiveRequest;
@@ -37,6 +44,11 @@ int main() {
   //turn on clock interrupts
   int *intControl = (int *)(ICU2_BASE + ENBL_OFFSET);
   *intControl = CLK3_MASK;
+  //enable the 40-bit clock
+  clockControl = (int *)(TIMER4_HIGH);
+  *clockControl = TIMER4_ENABLE_MASK;
+  int *counterValue = (int *)(TIMER4_LOW);
+  totalTime = 0;
 
   //turn on the caches
   enableCache();
@@ -71,8 +83,13 @@ int main() {
   active = dequeue(readyQueue);
   active->state = ACTIVE;
 
+  int startTime, endTime;
   while(!queueEmpty(readyQueue) || numEventBlocked > 0 || active->priority > 0) {
+    startTime = *counterValue;
     getNextRequest(active, activeRequest);
+    endTime = *counterValue;
+    active->totalTime += endTime - startTime;
+    totalTime += endTime - startTime;
     handle(activeRequest);
   }
 
@@ -101,6 +118,7 @@ int Create_sys(int priority, void (*code)()) {
   newTD->priority = priority;
   newTD->next = NULL;
   newTD->sendQHead = NULL;
+  newTD->totalTime = 0;
   *(newTD->SP + 12) = (int)freeMemStart;	//stack pointer
   enqueue(readyQueue, newTD, priority);
 
@@ -152,6 +170,8 @@ void handle(struct Request *request) {
 	*(queuedTask->SP) = -3;
 	makeTaskReady(queuedTask);
       }
+      //print out percent time used by this task
+      DEBUGPRINT("Task %d: used %d percent of CPU time\r", active->ID, (100*(active->totalTime))/totalTime);
       active->state = ZOMBIE;
       active = getNextTask();
       break;
