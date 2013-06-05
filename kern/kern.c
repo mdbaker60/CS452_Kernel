@@ -60,8 +60,7 @@ int main() {
   //created later
   int i;
   for(i=0; i<MAXTASKS; i++) {
-    taskArray[i].ID = i;
-    taskArray[i].generation = -1;
+    taskArray[i].ID = i - 0x100;
     taskArray[i].next = &taskArray[i+1];
   }
   firstFree = &taskArray[0];
@@ -82,17 +81,20 @@ int main() {
   kernMemStart -= 0x10;		//give IRQ stack 8 words of space
 
   initQueue(readyQueue);
-  userStacks = kernMemStart;
+  userStacks = kernMemStart - MAXTASKS*(0xFA00);
 
   //create the first user task
   active = NULL;
+  //DEBUGPRINT("about to create first user task\r");
   Create_sys(7, firstTask);
+  DEBUGPRINT("Created\r");
   active = dequeue(readyQueue);
   active->state = ACTIVE;
 
   int startTime, endTime;
   while(!queueEmpty(readyQueue) || numEventBlocked > 0 || active->priority > 0) {
-    DEBUGPRINT("scheduling task %d\r", active->ID);
+    if(active == NULL) DEBUGPRINT("active is NULL\r");
+    //DEBUGPRINT("scheduling task %d\r", active->ID);
     startTime = *counterValue;
     getNextRequest(active, activeRequest);
     endTime = *counterValue;
@@ -101,8 +103,8 @@ int main() {
     handle(activeRequest);
   }
 
-  for(i=0; i<nextTID; i++) {
-    if(taskArray[i].state != ZOMBIE) {
+  for(i=0; i<MAXTASKS; i++) {
+    if(taskArray[i].state != ZOMBIE && taskArray[i].ID >= 0) {
       bwprintf(COM2, "WARNING: task %d has not exited\r", i);
     }
   }
@@ -114,10 +116,11 @@ int Create_sys(int priority, void (*code)()) {
   if(firstFree == NULL) return -2;
   struct Task *newTD = firstFree;
   firstFree = firstFree->next;
-  int *myStack = userStacks + (newTD->ID)*(0xFA00);
+  newTD->ID += 0x100;
+  int myID = newTD->ID & 0xFF;
+  int *myStack = userStacks + (myID)*(0xFA00);
   //initialize user task context
   newTD->SP = myStack-56;		//loaded during user task schedule
-  ++(newTD->generation);
   newTD->SPSR = 0x50;
   if(active == NULL) {
     newTD->parentID = -1;
@@ -128,18 +131,22 @@ int Create_sys(int priority, void (*code)()) {
   newTD->state = READY;
   newTD->priority = priority;
   newTD->next = NULL;
+  newTD->last = NULL;
+  DEBUGPRINT("initialized first and last\r");
   newTD->sendQHead = NULL;
+  DEBUGPRINT("set sendQHead to NULL\r");
   newTD->totalTime = 0;
+  DEBUGPRINT("set totalTime to 0\r");
   *(newTD->SP + 12) = (int)myStack;	//stack pointer
-  //DEBUGPRINT("Task %d has been set up at address 0x%x\r", newTD->ID, newTD);
+  DEBUGPRINT("Task %d has been set up at address 0x%x\r", newTD->ID, newTD);
   enqueue(readyQueue, newTD, priority);
-  //DEBUGPRINT("Task %d has been added to the ready queue\r", newTD->ID);
+  DEBUGPRINT("Task %d has been added to the ready queue\r", newTD->ID);
 
   return newTD->ID;
 }
 
 void handle(struct Request *request) {
-  DEBUGPRINT("handling system call from task %d\r", active->ID);
+  struct Task *toDestroy;
   switch(request->ID) {
     case INTERRUPT:
       handleInterrupt();
@@ -184,7 +191,7 @@ void handle(struct Request *request) {
 	makeTaskReady(queuedTask);
       }
       //print out percent time used by this task
-      //DEBUGPRINT("Task %d: used %d percent of CPU time\r", active->ID, (100*(active->totalTime))/totalTime);
+      DEBUGPRINT("Task %d: used %d percent of CPU time\r", active->ID, (100*(active->totalTime))/totalTime);
       active->state = ZOMBIE;
       active = getNextTask();
       break;
@@ -271,6 +278,29 @@ void handle(struct Request *request) {
         *(active->SP) = -4;
 	makeTaskReady(active);
       }
+      active = getNextTask();
+      break;
+    case DESTROY:
+      //pop the send queue, returning -3
+      toDestroy = &taskArray[request->arg1 & 0xFF];
+      removeFromQueue(readyQueue, toDestroy);
+      while(toDestroy->sendQHead != NULL) {
+        struct Task *queuedTask = toDestroy->sendQHead;
+	toDestroy->sendQHead = queuedTask->next;
+	queuedTask->next = NULL;
+	*(queuedTask->SP) = -3;
+	makeTaskReady(queuedTask);
+      }
+      //print out percent time used by this task
+      DEBUGPRINT("Task %d: used %d percent of CPU time\r", toDestroy->ID, (100*(toDestroy->totalTime))/totalTime);
+      toDestroy->state = ZOMBIE;
+      if(lastFree == NULL) {
+ 	firstFree = lastFree = toDestroy;
+      }else{
+	lastFree->next = toDestroy;
+	lastFree = toDestroy;
+      }
+      makeTaskReady(active);
       active = getNextTask();
       break;
   }

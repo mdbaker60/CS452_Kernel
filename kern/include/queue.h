@@ -24,5 +24,6 @@ void initQueue(struct PriorityQueue *queue);
 void enqueue(struct PriorityQueue *queue, struct Task *task, int priority);
 struct Task *dequeue(struct PriorityQueue *queue);
 int queueEmpty(struct PriorityQueue *queue);
+void removeFromQueue(struct PriorityQueue *queue, struct Task *task);
 
 #endif

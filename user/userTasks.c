@@ -25,67 +25,38 @@ void notifier() {
   }
 }
 
-
-struct msg{
-  int delayTime;
-  int delayNum;
-};
-void clientTask(){
-  bwprintf(COM2, "new client task executing\r");
-  int parent = MyParentTid();
-  bwprintf(COM2, "obtained parent's tid\r");
-  int tid = MyTid();
-  bwprintf(COM2, "obtained my tid\r");
-  struct msg params;
-  int i = 1;
-  //Priority
-  //Delay time
-  //Number of delays
-  //Send a message to the first task which returns CS parameters
-  bwprintf(COM2, "sending message to parent(task %d)\r", parent);
-  Send(parent, (char *)&i, sizeof(int), (char *)&params, sizeof(struct msg));
-  bwprintf(COM2, "%d: Delay Time %d with %d delays\r", tid, params.delayTime, params.delayNum);
-  while(params.delayNum >= i){
-    Delay(params.delayTime);
-    bwprintf(COM2, "%d: Delay Time: %d, Finished delay: %d\r", tid, params.delayTime, i);
-    i++; 
-  }	
+void tester() {
+  bwprintf(COM2, "My TID is %d\r", MyTid());
+  int msg, reply;
+  Send(MyParentTid(), (char *)&msg, sizeof(int), (char *)&reply, sizeof(int));
   Exit();
 }
 
 void firstTask() {
-  int src, in;
-  struct msg buf;
-  Create(7, NSInit);
-  Create(7, CSInit);
-  int one = Create(4, clientTask);
-  int two = Create(3, clientTask);
-  int three = Create(2, clientTask);
-  int four = Create(1, clientTask);
   Create(0, busyTask);
 
-  bwprintf(COM2, "waiting for messages from all tasks(%d, %d, %d, %d)\r", one, two, three, four);
-  Receive(&src, (char *)&in, sizeof(int));
-  bwprintf(COM2, "got 1 message\r");
-  Receive(&src, (char *)&in, sizeof(int));
-  bwprintf(COM2, "got 2 messages\r");
-  Receive(&src, (char *)&in, sizeof(int));
-  bwprintf(COM2, "got 3 messages\r");
-  Receive(&src, (char *)&in, sizeof(int));
-  bwprintf(COM2, "got 4 messages\r");
+  int msg, reply, tid, i;
 
-  buf.delayTime = 10;
-  buf.delayNum = 20;
-  Reply(one, (char *)&buf, sizeof(struct msg));
-  buf.delayTime = 23;
-  buf.delayNum = 9;
-  Reply(two, (char *)&buf, sizeof(struct msg));
-  buf.delayTime = 33;
-  buf.delayNum = 6;
-  Reply(three, (char *)&buf, sizeof(struct msg));
-  buf.delayTime = 71;
-  buf.delayNum = 3;
-  Reply(four, (char *)&buf, sizeof(struct msg));
+  int ids[98];
 
+  for(i=0; i<98; i++) {
+    ids[i] = Create(1, tester);
+    bwprintf(COM2, "Created task %d\r", ids[i]);
+  }
+  bwgetc(COM2);
+  for(i=0; i<98; i++) {
+    Receive(&tid, (char *)&msg, sizeof(int));
+  }
+  for(i=0; i<98; i++) {
+    Destroy(ids[i]);
+  }
+
+  ids[0] = Create(1, tester);
+  ids[1] = Create(1, tester);
+
+  Receive(&tid, (char *)&msg, sizeof(int));
+  Receive(&tid, (char *)&msg, sizeof(int));
+  Reply(ids[0], (char *)&reply, sizeof(int));
+  Reply(ids[1], (char *)&reply, sizeof(int));
   Exit();
 }

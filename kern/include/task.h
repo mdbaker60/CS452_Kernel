@@ -8,9 +8,9 @@ struct Task {
   int SPSR;
   int returnAddress;
   int ID;
-  int generation;
   int parentID;
   struct Task *next;
+  struct Task *last;
   enum State state;
   int priority;
   char *messageBuffer;

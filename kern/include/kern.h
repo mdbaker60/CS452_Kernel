@@ -17,6 +17,7 @@
 #define RECEIVE		7
 #define REPLY		8
 #define AWAITEVENT	9
+#define DESTROY		10
 
 int *getSP();
 void setIRQ_SP(int SP);
