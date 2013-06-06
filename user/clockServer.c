@@ -56,11 +56,13 @@ void CSInit() {
       case DELAY:
 	msg.ticks += ticks;
       case DELAYUNTIL:	//add waiting task
+	
 	if(msg.ticks <= ticks) {
 	  reply = 0;
 	  Reply(src, (char *)&reply, sizeof(int));
  	}else{
-	  tempTask = &waitingTasks[msg.tid];
+	  tempTask = &waitingTasks[msg.tid & 0xFF];	//7F
+	  tempTask->ID = msg.tid;
 	  tempTask->untilTick = msg.ticks;
 	  tempTask->next = head;
 	  while (tempTask->next != NULL && tempTask->next->untilTick < tempTask->untilTick){
@@ -91,6 +93,7 @@ int Delay(int ticks) {
   msg.tid = MyTid();
   msg.ticks = ticks;
   Send(clockServer, (char *)&msg, sizeof(struct Message), (char *)&reply, sizeof(int));
+  
   return reply;
 }
 
