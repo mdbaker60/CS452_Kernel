@@ -41,15 +41,16 @@ int main() {
   //initialize clock
   int *clockControl = (int *)(TIMER3_BASE + CRTL_OFFSET);
   int *clockLoad = (int *)(TIMER3_BASE + LDR_OFFSET);
+  *clockControl = MODE_MASK | CLKSEL_MASK;
   *clockLoad = 5079;
-  *clockControl = ENABLE_MASK | MODE_MASK | CLKSEL_MASK;
+  *clockControl |= ENABLE_MASK;
   //turn on clock interrupts
   int *intControl = (int *)(ICU2_BASE + ENBL_OFFSET);
-  *intControl = CLK3_MASK;
+  *intControl |= CLK3_MASK;
   //enable the 40-bit clock
-  //clockControl = (int *)(TIMER4_HIGH);
-  //*clockControl = TIMER4_ENABLE_MASK;
-  //int *counterValue = (int *)(TIMER4_LOW);
+  clockControl = (int *)(TIMER4_HIGH);
+  *clockControl &= TIMER4_ENABLE_MASK;
+  int *counterValue = (int *)(TIMER4_LOW);
   totalTime = 0;
 
   //turn on the caches
@@ -92,11 +93,11 @@ int main() {
 
   int startTime, endTime;
   while(!queueEmpty(readyQueue) || numEventBlocked > 0 || active->priority > 0) {
-    //startTime = *counterValue;
+    startTime = *counterValue;
     getNextRequest(active, activeRequest);
-    //endTime = *counterValue;
+    endTime = *counterValue;
     active->totalTime += endTime - startTime;
-    //totalTime += endTime - startTime;
+    totalTime += endTime - startTime;
     handle(activeRequest);
   }
 
@@ -105,6 +106,13 @@ int main() {
       DEBUGPRINT("WARNING: task %d has not exited\r", taskArray[i].ID);
     }
   }
+
+  //turn off interupts and clocks
+  int *intClear = (int *)(ICU2_BASE + ENCL_OFFSET);
+  *intClear &= CLK3_MASK;
+  *clockControl &= ~(TIMER4_ENABLE_MASK);
+  clockControl = (int *)(TIMER3_BASE + CRTL_OFFSET);
+  *clockControl &= ~(ENABLE_MASK);
 
   return 0;
 }
