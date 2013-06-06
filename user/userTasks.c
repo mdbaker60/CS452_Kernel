@@ -25,30 +25,53 @@ void notifier() {
   }
 }
 
+void selfDestroy() {
+  Destroy(MyTid());
+}
+
+void testerChild() {
+  char reply[100];
+  int src;
+
+  bwprintf(COM2, "CHILD: My TID is %d and my parent's TID is %d\r", MyTid(), MyParentTid());
+
+  Receive(&src, reply, 100);
+  bwprintf(COM2, "CHILD: received message \"%s\"\r", reply);
+  Reply(src, "Thanks", 6);
+
+  Send(MyParentTid(), "Message to tester", 18, reply, 100);
+  bwprintf(COM2, "CHILD: received reply \"%s\"\r", reply);
+
+  Destroy(MyTid());
+}
+
 void tester() {
-  bwprintf(COM2, "My TID is %d\r", MyTid());
-  int msg, reply;
-  //Send(MyParentTid(), (char *)&msg, sizeof(int), (char *)&reply, sizeof(int));
-  Exit();
+  char reply[100];
+  int src;
+
+  int child = Create(1, testerChild);
+  bwprintf(COM2, "TESTER:My TID is %d and my child's TID is %d\r", MyTid(), child);
+  Pass();
+  
+  int err = Send(child, "Message from tester", 20, reply, 100);
+  bwprintf(COM2, "TESTER: received reply \"%s\"\r", reply);
+
+  Receive(&src, reply, 100);
+  bwprintf(COM2, "TESTER: received message \"%s\"\r", reply);
+  Reply(src, "Got the message", 16);
+
+  Destroy(MyTid());
 }
 
 void firstTask() {
   Create(0, busyTask);
 
-  int msg, tid, i;
-
-  int child, ids[98];
-
-  for(i=0; i<10; i++) {
-    ids[i] = Create(1, tester);
+  int i;
+  for(i=0; i<98; i++) {
+    Create(7, selfDestroy);
   }
-  //for(i=0; i<10; i++) {
-    //Receive(&tid, (char *)&msg, sizeof(int));
-  //}
-  //for(i=0; i<10; i++) {
-    //Reply(ids[i], (char *)&msg, sizeof(int));
-    //Destroy(ids[i]);
-  //}
+  
+  Create(2, tester);
 
-  Exit();
+  Destroy(MyTid());
 }

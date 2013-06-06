@@ -193,18 +193,19 @@ void handle(struct Request *request) {
       active = getNextTask();
       break;
     case SEND:
-      if(request->arg1 >= MAXTASKS) {			//impossible TID
+      if((request->arg1 & 0xFF) >= MAXTASKS) {			//impossible TID
 	*(active->SP) = -1;
 	makeTaskReady(active);
-      }else if(taskArray[request->arg1].ID == -1 || taskArray[request->arg1].state == ZOMBIE) {
+      }else if(taskArray[request->arg1 & 0xFF].ID != request->arg1 || 
+		taskArray[request->arg1 & 0xFF].state == ZOMBIE) {
 	//task not created or has exited
 	*(active->SP) = -2;
 	makeTaskReady(active);
       }else if(request->arg1 == active->ID) {	//sending to yourself?
 	*(active->SP) = -3;
 	makeTaskReady(active);
-      }else if(taskArray[request->arg1].state == SND_BL) {
-        struct Task *receiverTask = &taskArray[request->arg1];
+      }else if(taskArray[request->arg1 & 0xFF].state == SND_BL) {
+        struct Task *receiverTask = &taskArray[request->arg1 & 0xFF];
         memcpy(receiverTask->messageBuffer, (char *)request->arg2, 
 		MIN(receiverTask->messageLength, request->arg3));
 	*(receiverTask->senderTid) = active->ID;
@@ -214,7 +215,7 @@ void handle(struct Request *request) {
 	active->replyBuffer = (char *)request->arg4;
 	active->replyLength = request->arg5;
       }else{
-	struct Task *receiverTask = &taskArray[request->arg1];
+	struct Task *receiverTask = &taskArray[request->arg1 & 0xFF];
 	active->state = RCV_BL;
 	active->messageBuffer = (char *)request->arg2;
 	active->messageLength = request->arg3;
@@ -249,12 +250,13 @@ void handle(struct Request *request) {
       active = getNextTask();
       break;
     case REPLY:
-      if(request->arg1 >= MAXTASKS) {
+      if((request->arg1 & 0xFF) >= MAXTASKS) {
 	*(active->SP) = -1;
-      }else if(taskArray[request->arg1].ID == -1 || taskArray[request->arg1].state == ZOMBIE) {
+      }else if(taskArray[request->arg1 & 0xFF].ID != request->arg1 || 
+		taskArray[request->arg1].state == ZOMBIE) {
 	*(active->SP) = -2;
-      }else if(taskArray[request->arg1].state == RPL_BL) {
-	struct Task *senderTask = &taskArray[request->arg1];
+      }else if(taskArray[request->arg1 & 0xFF].state == RPL_BL) {
+	struct Task *senderTask = &taskArray[request->arg1 & 0xFF];
 	memcpy(senderTask->replyBuffer, (char *)request->arg2,
 		MIN(senderTask->replyLength, request->arg3));
 	*(senderTask->SP) = request->arg3;
@@ -299,7 +301,9 @@ void handle(struct Request *request) {
 	lastFree->next = toDestroy;
 	lastFree = toDestroy;
       }
-      makeTaskReady(active);
+      if(toDestroy != active) {
+        makeTaskReady(active);
+      }
       active = getNextTask();
       break;
   }
@@ -308,7 +312,7 @@ void handle(struct Request *request) {
 //scheduling functions
 struct Task *getNextTask() {
   struct Task *nextTask = dequeue(readyQueue);
-  nextTask->state = READY;
+  nextTask->state = ACTIVE;
   return nextTask;
 }
 void makeTaskReady(struct Task *task) {
