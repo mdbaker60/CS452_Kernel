@@ -11,7 +11,7 @@
 #ifdef DEBUG
 #define DEBUGPRINT(...) bwprintf(COM2, __VA_ARGS__);
 #else
-#define DEBUGPRINT(...) do {} while(0)
+#define DEBUGPRINT(...)	
 #endif
 
 static int numEventBlocked;
@@ -47,9 +47,9 @@ int main() {
   int *intControl = (int *)(ICU2_BASE + ENBL_OFFSET);
   *intControl = CLK3_MASK;
   //enable the 40-bit clock
-  clockControl = (int *)(TIMER4_HIGH);
-  *clockControl = TIMER4_ENABLE_MASK;
-  int *counterValue = (int *)(TIMER4_LOW);
+  //clockControl = (int *)(TIMER4_HIGH);
+  //*clockControl = TIMER4_ENABLE_MASK;
+  //int *counterValue = (int *)(TIMER4_LOW);
   totalTime = 0;
 
   //turn on the caches
@@ -82,30 +82,27 @@ int main() {
 
   initQueue(readyQueue);
   userStacks = kernMemStart - MAXTASKS*(0xFA00);
+  DEBUGPRINT("user stacks start at 0x%x\r", userStacks);
 
   //create the first user task
   active = NULL;
-  //DEBUGPRINT("about to create first user task\r");
   Create_sys(7, firstTask);
-  DEBUGPRINT("Created\r");
   active = dequeue(readyQueue);
   active->state = ACTIVE;
 
   int startTime, endTime;
   while(!queueEmpty(readyQueue) || numEventBlocked > 0 || active->priority > 0) {
-    if(active == NULL) DEBUGPRINT("active is NULL\r");
-    //DEBUGPRINT("scheduling task %d\r", active->ID);
-    startTime = *counterValue;
+    //startTime = *counterValue;
     getNextRequest(active, activeRequest);
-    endTime = *counterValue;
+    //endTime = *counterValue;
     active->totalTime += endTime - startTime;
-    totalTime += endTime - startTime;
+    //totalTime += endTime - startTime;
     handle(activeRequest);
   }
 
   for(i=0; i<MAXTASKS; i++) {
     if(taskArray[i].state != ZOMBIE && taskArray[i].ID >= 0) {
-      bwprintf(COM2, "WARNING: task %d has not exited\r", i);
+      DEBUGPRINT("WARNING: task %d has not exited\r", taskArray[i].ID);
     }
   }
 
@@ -132,15 +129,10 @@ int Create_sys(int priority, void (*code)()) {
   newTD->priority = priority;
   newTD->next = NULL;
   newTD->last = NULL;
-  DEBUGPRINT("initialized first and last\r");
   newTD->sendQHead = NULL;
-  DEBUGPRINT("set sendQHead to NULL\r");
   newTD->totalTime = 0;
-  DEBUGPRINT("set totalTime to 0\r");
   *(newTD->SP + 12) = (int)myStack;	//stack pointer
-  DEBUGPRINT("Task %d has been set up at address 0x%x\r", newTD->ID, newTD);
   enqueue(readyQueue, newTD, priority);
-  DEBUGPRINT("Task %d has been added to the ready queue\r", newTD->ID);
 
   return newTD->ID;
 }
@@ -161,11 +153,8 @@ void handle(struct Request *request) {
       }else{
         *(active->SP) = Create_sys(request->arg1, (void (*)())request->arg2);
       }
-      //DEBUGPRINT("Making task ready\r");
       makeTaskReady(active);
-      //DEBUGPRINT("Getting next active task\r");
       active = getNextTask();
-      //DEBUGPRINT("Next active task is %d\r", active->ID);
       break;
     case MYTID:
       *(active->SP) = active->ID;
@@ -283,7 +272,9 @@ void handle(struct Request *request) {
     case DESTROY:
       //pop the send queue, returning -3
       toDestroy = &taskArray[request->arg1 & 0xFF];
-      removeFromQueue(readyQueue, toDestroy);
+      if(toDestroy->state == READY) {
+	removeFromQueue(readyQueue, toDestroy);
+      }
       while(toDestroy->sendQHead != NULL) {
         struct Task *queuedTask = toDestroy->sendQHead;
 	toDestroy->sendQHead = queuedTask->next;
@@ -294,7 +285,7 @@ void handle(struct Request *request) {
       //print out percent time used by this task
       DEBUGPRINT("Task %d: used %d percent of CPU time\r", toDestroy->ID, (100*(toDestroy->totalTime))/totalTime);
       toDestroy->state = ZOMBIE;
-      if(lastFree == NULL) {
+      if(firstFree == NULL) {
  	firstFree = lastFree = toDestroy;
       }else{
 	lastFree->next = toDestroy;
@@ -308,9 +299,7 @@ void handle(struct Request *request) {
 
 //scheduling functions
 struct Task *getNextTask() {
-  //DEBUGPRINT("dequeueing\r");
   struct Task *nextTask = dequeue(readyQueue);
-  //DEBUGPRINT("done\r");
   nextTask->state = READY;
   return nextTask;
 }

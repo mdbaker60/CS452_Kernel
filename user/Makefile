@@ -1,9 +1,9 @@
 XCC = gcc
 AS = as
-CFLAGS = -c -O2 -fPIC -Wall -I../lib/include -Iinclude -mcpu=arm920t -msoft-float
 
 ASFLAGS = -mcpu=arm920t -mapcs-32
 
+all: CFLAGS += -I../lib/include
 all: ../bin/userTasks.o ../bin/nameServer.o ../bin/clockServer.o
 
 ../bin/%.s: %.c include/%.h
