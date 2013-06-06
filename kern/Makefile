@@ -1,9 +1,9 @@
 XCC = gcc
 AS = as
-CFLAGS = -c -O2 -DDEBUG -fPIC -Wall -I../lib/include -Iinclude -I../user/include -mcpu=arm920t -msoft-float
 
 ASFLAGS = -mcpu=arm920t -mapcs-32
 
+all: CFLAGS += -I../lib/include -I../user/include
 all: ../bin/kern.o ../bin/queue.o
 
 ../bin/kern.s: kern.c include/kern.h include/task.h include/queue.h

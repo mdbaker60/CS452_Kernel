@@ -1,6 +1,5 @@
 XCC = gcc
 AS = as
-CFLAGS = -c -O2 -fPIC -Wall -Iinclude -mcpu=arm920t -msoft-float
 
 ASFLAGS = -mcpu=arm920t -mapcs-32
 

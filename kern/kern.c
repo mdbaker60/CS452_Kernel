@@ -11,7 +11,7 @@
 #ifdef DEBUG
 #define DEBUGPRINT(...) bwprintf(COM2, __VA_ARGS__);
 #else
-#define DEBUGPRINT(...) do {} while(0)
+#define DEBUGPRINT(...)	
 #endif
 
 static int numEventBlocked;
@@ -41,14 +41,15 @@ int main() {
   //initialize clock
   int *clockControl = (int *)(TIMER3_BASE + CRTL_OFFSET);
   int *clockLoad = (int *)(TIMER3_BASE + LDR_OFFSET);
+  *clockControl = MODE_MASK | CLKSEL_MASK;
   *clockLoad = 5079;
-  *clockControl = ENABLE_MASK | MODE_MASK | CLKSEL_MASK;
+  *clockControl |= ENABLE_MASK;
   //turn on clock interrupts
   int *intControl = (int *)(ICU2_BASE + ENBL_OFFSET);
-  *intControl = CLK3_MASK;
+  *intControl |= CLK3_MASK;
   //enable the 40-bit clock
   clockControl = (int *)(TIMER4_HIGH);
-  *clockControl = TIMER4_ENABLE_MASK;
+  *clockControl &= TIMER4_ENABLE_MASK;
   int *counterValue = (int *)(TIMER4_LOW);
   totalTime = 0;
 
@@ -60,8 +61,7 @@ int main() {
   //created later
   int i;
   for(i=0; i<MAXTASKS; i++) {
-    taskArray[i].ID = i;
-    taskArray[i].generation = -1;
+    taskArray[i].ID = i - 0x100;
     taskArray[i].next = &taskArray[i+1];
   }
   firstFree = &taskArray[0];
@@ -82,7 +82,8 @@ int main() {
   kernMemStart -= 0x10;		//give IRQ stack 8 words of space
 
   initQueue(readyQueue);
-  userStacks = kernMemStart;
+  userStacks = kernMemStart - MAXTASKS*(0xFA00);
+  DEBUGPRINT("user stacks start at 0x%x\r", userStacks);
 
   //create the first user task
   active = NULL;
@@ -100,11 +101,18 @@ int main() {
     handle(activeRequest);
   }
 
-  for(i=0; i<nextTID; i++) {
-    if(taskArray[i].state != ZOMBIE) {
-      bwprintf(COM2, "WARNING: task %d has not exited\r", i);
+  for(i=0; i<MAXTASKS; i++) {
+    if(taskArray[i].state != ZOMBIE && taskArray[i].ID >= 0) {
+      DEBUGPRINT("WARNING: task %d has not exited\r", taskArray[i].ID);
     }
   }
+
+  //turn off interupts and clocks
+  int *intClear = (int *)(ICU2_BASE + ENCL_OFFSET);
+  *intClear &= CLK3_MASK;
+  *clockControl &= ~(TIMER4_ENABLE_MASK);
+  clockControl = (int *)(TIMER3_BASE + CRTL_OFFSET);
+  *clockControl &= ~(ENABLE_MASK);
 
   return 0;
 }
@@ -113,11 +121,11 @@ int Create_sys(int priority, void (*code)()) {
   if(firstFree == NULL) return -2;
   struct Task *newTD = firstFree;
   firstFree = firstFree->next;
-  newTD->next = NULL;
-  int *myStack = &userStacks[(newTD->ID)*(0xFA00)];
+  newTD->ID += 0x100;
+  int myID = newTD->ID & 0xFF;
+  int *myStack = userStacks + (myID)*(0xFA00);
   //initialize user task context
   newTD->SP = myStack-56;		//loaded during user task schedule
-  ++(newTD->generation);
   newTD->SPSR = 0x50;
   if(active == NULL) {
     newTD->parentID = -1;
@@ -128,16 +136,17 @@ int Create_sys(int priority, void (*code)()) {
   newTD->state = READY;
   newTD->priority = priority;
   newTD->next = NULL;
+  newTD->last = NULL;
   newTD->sendQHead = NULL;
   newTD->totalTime = 0;
-  *(newTD->SP + 12) = myStack;	//stack pointer
-  DEBUGPRINT("Task %d has been set up at address 0x%x\r", newTD->ID, newTD);
+  *(newTD->SP + 12) = (int)myStack;	//stack pointer
   enqueue(readyQueue, newTD, priority);
 
   return newTD->ID;
 }
 
 void handle(struct Request *request) {
+  struct Task *toDestroy;
   switch(request->ID) {
     case INTERRUPT:
       handleInterrupt();
@@ -184,18 +193,19 @@ void handle(struct Request *request) {
       active = getNextTask();
       break;
     case SEND:
-      if(request->arg1 >= MAXTASKS) {			//impossible TID
+      if((request->arg1 & 0xFF) >= MAXTASKS) {			//impossible TID
 	*(active->SP) = -1;
 	makeTaskReady(active);
-      }else if(taskArray[request->arg1].ID == -1 || taskArray[request->arg1].state == ZOMBIE) {
+      }else if(taskArray[request->arg1 & 0xFF].ID != request->arg1 || 
+		taskArray[request->arg1 & 0xFF].state == ZOMBIE) {
 	//task not created or has exited
 	*(active->SP) = -2;
 	makeTaskReady(active);
       }else if(request->arg1 == active->ID) {	//sending to yourself?
 	*(active->SP) = -3;
 	makeTaskReady(active);
-      }else if(taskArray[request->arg1].state == SND_BL) {
-        struct Task *receiverTask = &taskArray[request->arg1];
+      }else if(taskArray[request->arg1 & 0xFF].state == SND_BL) {
+        struct Task *receiverTask = &taskArray[request->arg1 & 0xFF];
         memcpy(receiverTask->messageBuffer, (char *)request->arg2, 
 		MIN(receiverTask->messageLength, request->arg3));
 	*(receiverTask->senderTid) = active->ID;
@@ -205,7 +215,7 @@ void handle(struct Request *request) {
 	active->replyBuffer = (char *)request->arg4;
 	active->replyLength = request->arg5;
       }else{
-	struct Task *receiverTask = &taskArray[request->arg1];
+	struct Task *receiverTask = &taskArray[request->arg1 & 0xFF];
 	active->state = RCV_BL;
 	active->messageBuffer = (char *)request->arg2;
 	active->messageLength = request->arg3;
@@ -240,12 +250,13 @@ void handle(struct Request *request) {
       active = getNextTask();
       break;
     case REPLY:
-      if(request->arg1 >= MAXTASKS) {
+      if((request->arg1 & 0xFF) >= MAXTASKS) {
 	*(active->SP) = -1;
-      }else if(taskArray[request->arg1].ID == -1 || taskArray[request->arg1].state == ZOMBIE) {
+      }else if(taskArray[request->arg1 & 0xFF].ID != request->arg1 || 
+		taskArray[request->arg1].state == ZOMBIE) {
 	*(active->SP) = -2;
-      }else if(taskArray[request->arg1].state == RPL_BL) {
-	struct Task *senderTask = &taskArray[request->arg1];
+      }else if(taskArray[request->arg1 & 0xFF].state == RPL_BL) {
+	struct Task *senderTask = &taskArray[request->arg1 & 0xFF];
 	memcpy(senderTask->replyBuffer, (char *)request->arg2,
 		MIN(senderTask->replyLength, request->arg3));
 	*(senderTask->SP) = request->arg3;
@@ -268,13 +279,40 @@ void handle(struct Request *request) {
       }
       active = getNextTask();
       break;
+    case DESTROY:
+      //pop the send queue, returning -3
+      toDestroy = &taskArray[request->arg1 & 0xFF];
+      if(toDestroy->state == READY) {
+	removeFromQueue(readyQueue, toDestroy);
+      }
+      while(toDestroy->sendQHead != NULL) {
+        struct Task *queuedTask = toDestroy->sendQHead;
+	toDestroy->sendQHead = queuedTask->next;
+	queuedTask->next = NULL;
+	*(queuedTask->SP) = -3;
+	makeTaskReady(queuedTask);
+      }
+      //print out percent time used by this task
+      DEBUGPRINT("Task %d: used %d percent of CPU time\r", toDestroy->ID, (100*(toDestroy->totalTime))/totalTime);
+      toDestroy->state = ZOMBIE;
+      if(firstFree == NULL) {
+ 	firstFree = lastFree = toDestroy;
+      }else{
+	lastFree->next = toDestroy;
+	lastFree = toDestroy;
+      }
+      if(toDestroy != active) {
+        makeTaskReady(active);
+      }
+      active = getNextTask();
+      break;
   }
 }
 
 //scheduling functions
 struct Task *getNextTask() {
   struct Task *nextTask = dequeue(readyQueue);
-  nextTask->state = READY;
+  nextTask->state = ACTIVE;
   return nextTask;
 }
 void makeTaskReady(struct Task *task) {

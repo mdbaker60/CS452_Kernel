@@ -80,3 +80,12 @@ AwaitEvent:
 	swi	#0x109
 	ldmfd	sp, {sp, pc}
 	.size	AwaitEvent, .-AwaitEvent
+	.align	2
+	.global	Destroy
+	.type	Destroy, %function
+Destroy:
+	mov	ip, sp
+	stmfd	sp!, {sp, lr}
+	swi	#0x10A
+	ldmfd	sp, {sp, pc}
+	.size	Destroy, .-Destroy
