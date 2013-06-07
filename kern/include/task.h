@@ -3,6 +3,9 @@
 
 enum State {READY, ACTIVE, ZOMBIE, RCV_BL, RPL_BL, SND_BL, EVT_BL};
 
+#define INDEX_MASK 0x7F
+#define GEN_UNIT 0x80
+
 struct Task {
   int *SP;
   int SPSR;
@@ -21,6 +24,7 @@ struct Task {
   struct Task *sendQHead;
   struct Task *sendQTail;
   int totalTime;
+  int event;
 };
 
 struct Request {
