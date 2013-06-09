@@ -3,6 +3,7 @@
 #include <nameServer.h>
 #include <syscall.h>
 #include <values.h>
+#include <bwio.h>
 
 struct WaitingTask {
   int ID;
@@ -11,14 +12,14 @@ struct WaitingTask {
   //struct WaitingTask *last;
 };
 
-struct Message {
+struct CSMessage {
   int type;
   int tid;
   int ticks;
 };
 
 void CSInit() {
-  struct Message msg;
+  struct CSMessage msg;
   int reply;
   int src;
   int ticks = 0;
@@ -38,9 +39,9 @@ void CSInit() {
   
   struct WaitingTask *tempTask;
   while(true) {
-    Receive(&src, (char *)&msg, sizeof(struct Message));
+    Receive(&src, (char *)&msg, sizeof(struct CSMessage));
     switch(msg.type) {
-      case NOTIFIER:		//from notifier
+      case CSNOTIFIER:		//from notifier
 	++ticks;
 	Reply(src, (char *)&reply, sizeof(int));
 	tempTask = head;
@@ -53,15 +54,15 @@ void CSInit() {
 	  tempTask = head;
 	} 
 	break;
-      case DELAY:
+      case CSDELAY:
 	msg.ticks += ticks;
-      case DELAYUNTIL:	//add waiting task
+      case CSDELAYUNTIL:	//add waiting task
 	
 	if(msg.ticks <= ticks) {
 	  reply = 0;
 	  Reply(src, (char *)&reply, sizeof(int));
  	}else{
-	  tempTask = &waitingTasks[msg.tid & 0xFF];	//7F
+	  tempTask = &waitingTasks[msg.tid & 0x7F];
 	  tempTask->ID = msg.tid;
 	  tempTask->untilTick = msg.ticks;
 	  tempTask->next = head;
@@ -78,41 +79,46 @@ void CSInit() {
 	  }
  	}
 	break;
-      case GETTIME:	//get time
+      case CSGETTIME:	//get time
 	Reply(src, (char *)&ticks, sizeof(int));
+	break;
+      case CSSHUTDOWN:	//shut down the clock server
+	Destroy(notifierTid);
+	Reply(src, (char *)&reply, sizeof(int));
+	Destroy(MyTid());
 	break;
     }
   }
 }
 
 int Delay(int ticks) {
-  struct Message msg;
+  struct CSMessage msg;
   int reply;
   int clockServer = whoIs("Clock Server");
-  msg.type = 2;
+  msg.type = CSDELAY;
   msg.tid = MyTid();
   msg.ticks = ticks;
-  Send(clockServer, (char *)&msg, sizeof(struct Message), (char *)&reply, sizeof(int));
+  Send(clockServer, (char *)&msg, sizeof(struct CSMessage), (char *)&reply, sizeof(int));
   
   return reply;
 }
 
 int Time() {
-  struct Message msg;
+  struct CSMessage msg;
   int reply;
   int clockServer = whoIs("Clock Server");
-  msg.type = 3;
-  Send(clockServer, (char *)&msg, sizeof(struct Message), (char *)&reply, sizeof(int));
+  msg.type = CSGETTIME;
+  Send(clockServer, (char *)&msg, sizeof(struct CSMessage), (char *)&reply, sizeof(int));
   return reply;
 }
 
 int DelayUntil(int ticks) {
-  struct Message msg;
+  struct CSMessage msg;
   int reply;
   int clockServer = whoIs("Clock Server");
-  msg.type = 1;
+  msg.type = CSDELAYUNTIL;
   msg.tid = MyTid();
   msg.ticks = ticks;
-  Send(clockServer, (char *)&msg, sizeof(struct Message), (char *)&reply, sizeof(int));
+  Send(clockServer, (char *)&msg, sizeof(struct CSMessage), (char *)&reply, sizeof(int));
   return reply;
 }

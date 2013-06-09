@@ -27,7 +27,7 @@ int RegisterAs (char* task){
 //0 success
   struct msg snd;
   int ret;
-  snd.control = 0;
+  snd.control = NSREGISTER;
   strcp(snd.message, task, strlen(task));
   Send(1, (char*)&snd, sizeof(struct msg), (char *) &ret, sizeof(int));	
   return 0;
@@ -36,7 +36,7 @@ int RegisterAs (char* task){
 int whoIs(char* task){
   struct msg snd;
   int ret;
-  snd.control = 1;
+  snd.control = NSWHOIS;
   strcp(snd.message, task, strlen(task));
   Send(1, (char*)&snd, sizeof(struct msg), (char *) &ret, sizeof(int));	
   return ret;	
@@ -55,14 +55,19 @@ void NSInit(){
   while(true){
     Receive(&src, (char *)&in, sizeof(struct msg));
     switch (in.control){
-      case 0:
+      case NSREGISTER:
 	insert(in.message, src, Table);
 	ret = 0;
 	Reply(src, (char *)&ret, sizeof(int));
 	break;
-      case 1: 
+      case NSWHOIS:
 	ret = retrieve(in.message, Table);
 	Reply(src, (char *)&ret, sizeof(int));
+	break;
+      case NSSHUTDOWN:
+	Reply(src, (char *)&ret, sizeof(int));
+	int tid = MyTid();
+	Destroy(tid);
 	break;
     }	
   }

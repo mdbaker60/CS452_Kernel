@@ -21,6 +21,7 @@ struct Task {
   char *replyBuffer;
   int replyLength;
   int *senderTid;
+  int receiverTid;	//for destroying RCV_BL tasks
   struct Task *sendQHead;
   struct Task *sendQTail;
   int totalTime;

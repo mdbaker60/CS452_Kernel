@@ -4,4 +4,6 @@
 void firstTask();
 void notifier();
 
+void notifyFirstTaskDone();
+
 #endif

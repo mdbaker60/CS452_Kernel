@@ -1,10 +1,11 @@
+#include <userTasks.h>
 #include <bwio.h>
 #include <syscall.h>
 #include <nameServer.h>
 #include <clockServer.h>
 #include <values.h>
 
-void busyTask() {
+void idleTask() {
   while(true) Pass();
 }
 
@@ -25,54 +26,42 @@ void notifier() {
   }
 }
 
-
 struct msg{
   int delayTime;
   int delayNum;
 };
 void clientTask(){
-  bwprintf(COM2, "new client task executing\r");
   int parent = MyParentTid();
-  bwprintf(COM2, "obtained parent's tid\r");
   int tid = MyTid();
-  bwprintf(COM2, "obtained my tid\r");
   struct msg params;
   int i = 1;
-  //Priority
-  //Delay time
-  //Number of delays
-  //Send a message to the first task which returns CS parameters
-  bwprintf(COM2, "sending message to parent(task %d)\r", parent);
   Send(parent, (char *)&i, sizeof(int), (char *)&params, sizeof(struct msg));
-  bwprintf(COM2, "%d: Delay Time %d with %d delays\r", tid, params.delayTime, params.delayNum);
   while(params.delayNum >= i){
     Delay(params.delayTime);
-    bwprintf(COM2, "%d: Delay Time: %d, Finished delay: %d\r", tid, params.delayTime, i);
+    bwprintf(COM2, "Task %d: Delay Time %d, Finished delay %d\r", tid, params.delayTime, i);
     i++; 
-  }	
-  Exit();
+  }
+
+  notifyFirstTaskDone();
+  tid = MyTid();
+  Destroy(MyTid());
 }
 
 void firstTask() {
-  int src, in;
+  int src, in, numTasks = 4;
   struct msg buf;
-  Create(7, NSInit);
-  Create(7, CSInit);
+  Create(6, NSInit);
+  Create(6, CSInit);
+  int idleTid = Create(0, idleTask);
   int one = Create(4, clientTask);
   int two = Create(3, clientTask);
   int three = Create(2, clientTask);
   int four = Create(1, clientTask);
-  Create(0, busyTask);
 
-  bwprintf(COM2, "waiting for messages from all tasks(%d, %d, %d, %d)\r", one, two, three, four);
   Receive(&src, (char *)&in, sizeof(int));
-  bwprintf(COM2, "got 1 message\r");
   Receive(&src, (char *)&in, sizeof(int));
-  bwprintf(COM2, "got 2 messages\r");
   Receive(&src, (char *)&in, sizeof(int));
-  bwprintf(COM2, "got 3 messages\r");
   Receive(&src, (char *)&in, sizeof(int));
-  bwprintf(COM2, "got 4 messages\r");
 
   buf.delayTime = 10;
   buf.delayNum = 20;
@@ -87,5 +76,27 @@ void firstTask() {
   buf.delayNum = 3;
   Reply(four, (char *)&buf, sizeof(struct msg));
 
-  Exit();
+  //wait until all tasks have notified as being done, then shut down servers and exit
+  int diff, garbage;
+  while(numTasks > 0) {
+    Receive(&src, (char *)&diff, sizeof(int));
+    numTasks += diff;
+    Destroy(src);
+  }
+  //shutdown clock server
+  diff = CSSHUTDOWN;
+  src = whoIs("Clock Server");
+  Send(src, (char *)&diff, sizeof(int), (char *)&garbage, sizeof(int));
+  //shut down name server
+  diff = NSSHUTDOWN;
+  Send(1, (char *)&diff, sizeof(int), (char *)&garbage, sizeof(int));
+  //destroy idle task
+  Destroy(idleTid);
+
+  Destroy(MyTid());
+}
+
+void notifyFirstTaskDone() {
+  int msg = -1, reply = 0;
+  Send(0, (char *)&msg, sizeof(int), (char *)reply, sizeof(int));
 }

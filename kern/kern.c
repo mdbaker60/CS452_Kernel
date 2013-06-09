@@ -14,7 +14,6 @@
 #define DEBUGPRINT(...)	
 #endif
 
-static int numEventBlocked;
 static int *userStacks;
 static int *kernMemStart;
 static int nextTID;
@@ -36,7 +35,6 @@ int main() {
   readyQueue = &kreadyQueue;
   taskArray = ktaskArray;
   waitingTasks = kwaitingTasks;
-  numEventBlocked = 0;
 
   //initialize clock
   int *clockControl = (int *)(TIMER3_BASE + CRTL_OFFSET);
@@ -91,12 +89,12 @@ int main() {
 
   //create the first user task
   active = NULL;
-  Create_sys(7, firstTask);
+  Create_sys(6, firstTask);
   active = dequeue(readyQueue);
   active->state = ACTIVE;
 
   int startTime, endTime;
-  while(!queueEmpty(readyQueue) || numEventBlocked > 0 || active->priority > 0) {
+  while(active != NULL) {
     startTime = *counterValue;
     getNextRequest(active, activeRequest);
     endTime = *counterValue;
@@ -107,7 +105,7 @@ int main() {
 
   for(i=0; i<MAXTASKS; i++) {
     if(taskArray[i].state != ZOMBIE && taskArray[i].ID >= 0) {
-      DEBUGPRINT("WARNING: task %d has not exited\r", taskArray[i].ID);
+      DEBUGPRINT("WARNING: task %d has not exited(in state %d)\r", taskArray[i].ID, taskArray[i].state);
     }
   }
 
@@ -225,6 +223,7 @@ void handle(struct Request *request) {
       }else{
 	struct Task *receiverTask = &taskArray[request->arg1 & INDEX_MASK];
 	active->state = RCV_BL;
+	active->receiverTid = request->arg1;	//used if Destroy is called while RCV_BL
 	active->messageBuffer = (char *)request->arg2;
 	active->messageLength = request->arg3;
 	active->replyBuffer = (char *)request->arg4;
@@ -233,6 +232,7 @@ void handle(struct Request *request) {
 	  receiverTask->sendQHead = receiverTask->sendQTail = active;
 	}else{
 	  (receiverTask->sendQTail)->next = active;
+	  active->last = receiverTask->sendQTail;
 	  receiverTask->sendQTail = active;
 	}
       }
@@ -247,6 +247,7 @@ void handle(struct Request *request) {
       }else{
 	struct Task *senderTask = active->sendQHead;
 	active->sendQHead = senderTask->next;
+	(active->sendQHead)->last = NULL;
 	senderTask->next = NULL;
 	memcpy((char *)request->arg2, senderTask->messageBuffer,
 		MIN(senderTask->messageLength, request->arg3));
@@ -278,7 +279,6 @@ void handle(struct Request *request) {
       break;
     case AWAITEVENT:
       if(waitingTasks[request->arg1] == NULL) {
-	++numEventBlocked;
 	waitingTasks[request->arg1] = active;
 	active->state = EVT_BL;
 	active->event = request->arg1;
@@ -303,7 +303,25 @@ void handle(struct Request *request) {
       }
       //if task is event blocked, remove it from event array
       if(toDestroy->state == EVT_BL) {
-	waitingTasks[toDestroy->state] = NULL;
+	waitingTasks[toDestroy->event] = NULL;
+      }
+      //if task is receive blocked, remove it from the receving taks's send queue
+      if(toDestroy->state == RCV_BL) {
+	if(toDestroy->next == NULL && toDestroy->last == NULL) {
+	  struct Task *receiver = &taskArray[toDestroy->receiverTid & INDEX_MASK];
+	  receiver->sendQHead = receiver->sendQTail = NULL;
+        }else if(toDestroy->next == NULL) {
+	  (toDestroy->last)->next = NULL;
+	  struct Task *receiver = &taskArray[toDestroy->receiverTid & INDEX_MASK];
+	  receiver->sendQTail = toDestroy->last;
+	}else if(toDestroy->last == NULL) {
+	  (toDestroy->next)->last = NULL;
+	  struct Task *receiver = &taskArray[toDestroy->receiverTid & INDEX_MASK];
+	  receiver->sendQHead = toDestroy->next;
+	}else{
+	  (toDestroy->next)->last = toDestroy->last;
+	  (toDestroy->last)->next = toDestroy->next;
+	}
       }
       //print out percent time used by this task
       DEBUGPRINT("Task %d: used %d percent of CPU time\r", toDestroy->ID, (100*(toDestroy->totalTime))/totalTime);
@@ -339,7 +357,6 @@ void handleInterrupt() {
     int *clockClear = (int *)(TIMER3_BASE + CLR_OFFSET);
     *clockClear = 0;
     if(waitingTasks[CLOCK_EVENT] != NULL) {
-      --numEventBlocked;
       *(waitingTasks[CLOCK_EVENT]->SP) = 0;
       makeTaskReady(waitingTasks[CLOCK_EVENT]);
       waitingTasks[CLOCK_EVENT] = NULL;

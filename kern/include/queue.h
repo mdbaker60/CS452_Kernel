@@ -16,6 +16,7 @@ static const int LogTable256[256] =
 struct PriorityQueue {
   int highPriority;
   int availablePriorities;
+  int size;
   struct Task *head[NUMPRIO];
   struct Task *tail[NUMPRIO];
 };
