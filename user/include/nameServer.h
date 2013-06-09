@@ -7,6 +7,6 @@
 
 void NSInit();
 int whoIs(char* task);
-int RegisterAs(char* name);
+int RegisterAs(char *task);
 
 #endif
