@@ -82,11 +82,6 @@ void CSInit() {
       case CSGETTIME:	//get time
 	Reply(src, (char *)&ticks, sizeof(int));
 	break;
-      case CSSHUTDOWN:	//shut down the clock server
-	Destroy(notifierTid);
-	Reply(src, (char *)&reply, sizeof(int));
-	Destroy(MyTid());
-	break;
     }
   }
 }

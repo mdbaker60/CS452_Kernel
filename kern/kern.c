@@ -42,9 +42,14 @@ int main() {
   *clockControl = MODE_MASK | CLKSEL_MASK;
   *clockLoad = 5079;
   *clockControl |= ENABLE_MASK;
-  //turn on clock interrupts
-  int *intControl = (int *)(ICU2_BASE + ENBL_OFFSET);
-  *intControl |= CLK3_MASK;
+  //initialize the UARTs
+  int *UART2Control = (int *)(UART2_BASE + UART_CTLR_OFFSET);
+  *UART2Control |= (RIEN_MASK | TIEN_MASK);
+  //turn on interrupts from the clock and the UARTs
+  int *ICU1Control = (int *)(ICU1_BASE + ENBL_OFFSET);
+  int *ICU2Control = (int *)(ICU2_BASE + ENBL_OFFSET);
+  *ICU1Control |= (UART1RX_MASK | UART1TX_MASK | UART2RX_MASK | UART2TX_MASK);
+  *ICU2Control |= CLK3_MASK;
   //enable the 40-bit clock
   clockControl = (int *)(TIMER4_HIGH);
   *clockControl &= TIMER4_ENABLE_MASK;
@@ -52,8 +57,9 @@ int main() {
   totalTime = 0;
 
   //turn off the FIFOs
-  int *UART2Control = (int *)(UART2_BASE + UART_LCRH_OFFSET);
-  *UART2Control &= ~(FEN_MASK);
+  int *UART2FIFOControl = (int *)(UART2_BASE + UART_LCRH_OFFSET);
+  *UART2FIFOControl &= ~(FEN_MASK);
+
 
   //turn on the caches
   enableCache();
@@ -95,6 +101,9 @@ int main() {
 
   int startTime, endTime;
   while(active != NULL) {
+    if(active->ID == 0) {
+      DEBUGPRINT("scheduling first task\r");
+    }
     startTime = *counterValue;
     getNextRequest(active, activeRequest);
     endTime = *counterValue;
@@ -110,14 +119,16 @@ int main() {
   }
 
   //turn off interupts and clocks
-  int *intClear = (int *)(ICU2_BASE + ENCL_OFFSET);
-  *intClear &= CLK3_MASK;
+  int *ICU1Clear = (int *)(ICU1_BASE + ENCL_OFFSET);
+  int *ICU2Clear = (int *)(ICU2_BASE + ENCL_OFFSET);
+  *ICU1Clear &= (UART1RX_MASK | UART1TX_MASK | UART2RX_MASK | UART2TX_MASK);
+  *ICU2Clear &= CLK3_MASK;
   *clockControl &= ~(TIMER4_ENABLE_MASK);
   clockControl = (int *)(TIMER3_BASE + CRTL_OFFSET);
   *clockControl &= ~(ENABLE_MASK);
 
   //turn back on the FIFOs
-  *UART2Control |= FEN_MASK;
+  *UART2FIFOControl |= FEN_MASK;
 
   return 0;
 }
@@ -362,11 +373,26 @@ int destroyTask(int Tid) {
     lastFree->next = toDestroy;
     lastFree = toDestroy;
   }
+
+  return 0;
 }
 
 void handleInterrupt() {
-  int *status = (int *)(ICU2_BASE + STAT_OFFSET);
-  if((int)status | CLK3_MASK) {
+  int *ICU1Status = (int *)(ICU1_BASE + STAT_OFFSET);
+  int *ICU2Status = (int *)(ICU2_BASE + STAT_OFFSET);
+  if(*ICU1Status & UART2RX_MASK) {
+    DEBUGPRINT("RX IRQ\r");
+    int *UART2Data = (int *)(UART2_BASE + UART_DATA_OFFSET);
+    if(waitingTasks[TERMIN_EVENT] != NULL) {
+      *(waitingTasks[TERMIN_EVENT]->SP) = *UART2Data & DATA_MASK;
+      makeTaskReady(waitingTasks[TERMIN_EVENT]);
+      waitingTasks[TERMIN_EVENT] = NULL;
+    }else{
+      int garbage = *UART2Data;
+    }
+  }else if(*ICU1Status & UART2TX_MASK) {
+    
+  }else if(*ICU2Status & CLK3_MASK) {
     int *clockClear = (int *)(TIMER3_BASE + CLR_OFFSET);
     *clockClear = 0;
     if(waitingTasks[CLOCK_EVENT] != NULL) {

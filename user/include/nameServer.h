@@ -3,7 +3,6 @@
 
 #define NSREGISTER	0
 #define NSWHOIS		1
-#define NSSHUTDOWN	2
 
 void NSInit();
 int whoIs(char* task);

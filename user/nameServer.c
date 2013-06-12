@@ -83,10 +83,6 @@ void NSInit(){
 	reply = retrieve(in.message, &table);
 	Reply(src, (char *)&reply, sizeof(int));
 	break;
-      case NSSHUTDOWN:
-	Reply(src, (char *)&reply, sizeof(int));
-	Destroy(MyTid());
-	break;
     }
   }
 }
