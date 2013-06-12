@@ -89,3 +89,12 @@ Destroy:
 	swi	#0x10A
 	ldmfd	sp, {sp, pc}
 	.size	Destroy, .-Destroy
+	.align	2
+	.global	Shutdown
+	.type	Shutdown, %function
+Shutdown:
+	mov	ip, sp
+	stmfd	sp!, {sp, lr}
+	swi	#0xB
+	ldmfd	sp, {sp, pc}
+	.size	Shutdown, .-Shutdown

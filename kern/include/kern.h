@@ -18,6 +18,7 @@
 #define REPLY		8
 #define AWAITEVENT	9
 #define DESTROY		10
+#define SHUTDOWN	11
 
 int *getSP();
 void setIRQ_SP(int SP);
@@ -29,6 +30,7 @@ void getNextRequest(struct Task *task, struct Request *request);
 void handle(struct Request *request);
 struct Task *getNextTask();
 void makeTaskReady(struct Task *task);
+int destroyTask(int Tid);
 void handleInterrupt();
 
 #endif

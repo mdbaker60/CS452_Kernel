@@ -152,7 +152,7 @@ int Create_sys(int priority, void (*code)()) {
 }
 
 void handle(struct Request *request) {
-  struct Task *toDestroy;
+  int i;
   switch(request->ID) {
     case INTERRUPT:
       handleInterrupt();
@@ -289,53 +289,20 @@ void handle(struct Request *request) {
       active = getNextTask();
       break;
     case DESTROY:
-      //pop the send queue, returning -3
-      toDestroy = &taskArray[request->arg1 & INDEX_MASK];
-      if(toDestroy->state == READY) {
-	removeFromQueue(readyQueue, toDestroy);
-      }
-      while(toDestroy->sendQHead != NULL) {
-        struct Task *queuedTask = toDestroy->sendQHead;
-	toDestroy->sendQHead = queuedTask->next;
-	queuedTask->next = NULL;
-	*(queuedTask->SP) = -3;
-	makeTaskReady(queuedTask);
-      }
-      //if task is event blocked, remove it from event array
-      if(toDestroy->state == EVT_BL) {
-	waitingTasks[toDestroy->event] = NULL;
-      }
-      //if task is receive blocked, remove it from the receving taks's send queue
-      if(toDestroy->state == RCV_BL) {
-	if(toDestroy->next == NULL && toDestroy->last == NULL) {
-	  struct Task *receiver = &taskArray[toDestroy->receiverTid & INDEX_MASK];
-	  receiver->sendQHead = receiver->sendQTail = NULL;
-        }else if(toDestroy->next == NULL) {
-	  (toDestroy->last)->next = NULL;
-	  struct Task *receiver = &taskArray[toDestroy->receiverTid & INDEX_MASK];
-	  receiver->sendQTail = toDestroy->last;
-	}else if(toDestroy->last == NULL) {
-	  (toDestroy->next)->last = NULL;
-	  struct Task *receiver = &taskArray[toDestroy->receiverTid & INDEX_MASK];
-	  receiver->sendQHead = toDestroy->next;
-	}else{
-	  (toDestroy->next)->last = toDestroy->last;
-	  (toDestroy->last)->next = toDestroy->next;
-	}
-      }
-      //print out percent time used by this task
-      DEBUGPRINT("Task %d: used %d percent of CPU time\r", toDestroy->ID, (100*(toDestroy->totalTime))/totalTime);
-      toDestroy->state = ZOMBIE;
-      if(firstFree == NULL) {
- 	firstFree = lastFree = toDestroy;
-      }else{
-	lastFree->next = toDestroy;
-	lastFree = toDestroy;
-      }
-      if(toDestroy != active) {
-        makeTaskReady(active);
+      destroyTask(request->arg1);
+      if(active->ID != request->arg1) {
+	makeTaskReady(active);
       }
       active = getNextTask();
+      break;
+    case SHUTDOWN:
+      for(i=0; i<MAXTASKS; i++) {
+	struct Task *curTask = &taskArray[i];
+	if(curTask->state != ZOMBIE && curTask->ID >= 0) {
+	  destroyTask(curTask->ID);
+	}
+      }
+      active = NULL;
       break;
   }
 }
@@ -349,6 +316,52 @@ struct Task *getNextTask() {
 void makeTaskReady(struct Task *task) {
   task->state = READY;
   enqueue(readyQueue, task, task->priority);
+}
+
+int destroyTask(int Tid) {
+  //pop the send queue, returning -3
+  struct Task *toDestroy = &taskArray[Tid & INDEX_MASK];
+  if(toDestroy->state == READY) {
+    removeFromQueue(readyQueue, toDestroy);
+  }
+  while(toDestroy->sendQHead != NULL) {
+    struct Task *queuedTask = toDestroy->sendQHead;
+    toDestroy->sendQHead = queuedTask->next;
+    queuedTask->next = NULL;
+    *(queuedTask->SP) = -3;
+    makeTaskReady(queuedTask);
+  }
+  //if task is event blocked, remove it from event array
+  if(toDestroy->state == EVT_BL) {
+    waitingTasks[toDestroy->event] = NULL;
+  }
+  //if task is receive blocked, remove it from the receving taks's send queue
+  if(toDestroy->state == RCV_BL) {
+    if(toDestroy->next == NULL && toDestroy->last == NULL) {
+      struct Task *receiver = &taskArray[toDestroy->receiverTid & INDEX_MASK];
+      receiver->sendQHead = receiver->sendQTail = NULL;
+    }else if(toDestroy->next == NULL) {
+      (toDestroy->last)->next = NULL;
+      struct Task *receiver = &taskArray[toDestroy->receiverTid & INDEX_MASK];
+      receiver->sendQTail = toDestroy->last;
+    }else if(toDestroy->last == NULL) {
+      (toDestroy->next)->last = NULL;
+      struct Task *receiver = &taskArray[toDestroy->receiverTid & INDEX_MASK];
+      receiver->sendQHead = toDestroy->next;
+    }else{
+      (toDestroy->next)->last = toDestroy->last;
+      (toDestroy->last)->next = toDestroy->next;
+    }
+  }
+  //print out percent time used by this task
+  DEBUGPRINT("Task %d: used %d percent of CPU time\r", toDestroy->ID, (100*(toDestroy->totalTime))/totalTime);
+  toDestroy->state = ZOMBIE;
+  if(firstFree == NULL) {
+    firstFree = lastFree = toDestroy;
+  }else{
+    lastFree->next = toDestroy;
+    lastFree = toDestroy;
+  }
 }
 
 void handleInterrupt() {

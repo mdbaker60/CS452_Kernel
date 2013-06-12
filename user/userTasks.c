@@ -83,17 +83,7 @@ void firstTask() {
     numTasks += diff;
     Destroy(src);
   }
-  //shutdown clock server
-  diff = CSSHUTDOWN;
-  src = whoIs("Clock Server");
-  Send(src, (char *)&diff, sizeof(int), (char *)&garbage, sizeof(int));
-  //shut down name server
-  diff = NSSHUTDOWN;
-  Send(1, (char *)&diff, sizeof(int), (char *)&garbage, sizeof(int));
-  //destroy idle task
-  Destroy(idleTid);
-
-  Destroy(MyTid());
+  Shutdown();
 }
 
 void notifyFirstTaskDone() {

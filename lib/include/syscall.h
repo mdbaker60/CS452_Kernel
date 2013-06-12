@@ -11,5 +11,6 @@ int Receive(int *tid, char *msg, int msglen);
 int Reply(int tid, char *reply, int replylen);
 int AwaitEvent(int eventid);
 int Destroy(int tid);
+void Shutdown();
 
 #endif
