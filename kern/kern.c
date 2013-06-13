@@ -22,6 +22,7 @@ static struct PriorityQueue *readyQueue;
 static struct Request *activeRequest;
 static struct Task *taskArray;
 static struct Task **waitingTasks;
+static int *eventStatus;
 static struct Task *firstFree;
 static struct Task *lastFree;
 static int totalTime;
@@ -31,10 +32,12 @@ int main() {
   struct PriorityQueue kreadyQueue;
   struct Task ktaskArray[MAXTASKS];
   struct Task *kwaitingTasks[NUMEVENTS];
+  int keventStatus[NUMEVENTS];
   activeRequest = &kactiveRequest; 
   readyQueue = &kreadyQueue;
   taskArray = ktaskArray;
   waitingTasks = kwaitingTasks;
+  eventStatus = keventStatus;
 
   //initialize clock
   int *clockControl = (int *)(TIMER3_BASE + CRTL_OFFSET);
@@ -43,12 +46,18 @@ int main() {
   *clockLoad = 5079;
   *clockControl |= ENABLE_MASK;
   //initialize the UARTs
-  int *UART2Control = (int *)(UART2_BASE + UART_CTLR_OFFSET);
-  *UART2Control |= (RIEN_MASK | TIEN_MASK);
+  //int *UART2Control = (int *)(UART2_BASE + UART_CTLR_OFFSET);
+  //int *UART2Flags = (int *)(UART2_BASE + UART_FLAG_OFFSET);
+  //int *UART2Data = (int *)(UART2_BASE + UART_DATA_OFFSET);
+  //*UART2Control |= (RIEN_MASK);
+  //if(*UART2Flags & RXFF_MASK) {
+  //  totalTime = *UART2Data;
+  //}
   //turn on interrupts from the clock and the UARTs
-  int *ICU1Control = (int *)(ICU1_BASE + ENBL_OFFSET);
+  //int *ICU1Control = (int *)(ICU1_BASE + ENBL_OFFSET);
   int *ICU2Control = (int *)(ICU2_BASE + ENBL_OFFSET);
-  *ICU1Control |= (UART1RX_MASK | UART1TX_MASK | UART2RX_MASK | UART2TX_MASK);
+  //*ICU1Control |= (UART1RX_MASK | UART1TX_MASK | UART2RX_MASK | UART2TX_MASK);
+  //*ICU1Control = (UART2RX_MASK | UART2TX_MASK);
   *ICU2Control |= CLK3_MASK;
   //enable the 40-bit clock
   clockControl = (int *)(TIMER4_HIGH);
@@ -60,11 +69,10 @@ int main() {
   int *UART2FIFOControl = (int *)(UART2_BASE + UART_LCRH_OFFSET);
   *UART2FIFOControl &= ~(FEN_MASK);
 
-
   //turn on the caches
   enableCache();
 
-  //initialize all tasks's tids to -1
+  //initialize all tasks's tids to negatives
   //so we can identify if they have been
   //created later
   int i;
@@ -78,6 +86,7 @@ int main() {
   //initialize all wating tasks to NULL
   for(i=0; i<NUMEVENTS; i++) {
     waitingTasks[i] = NULL;
+    eventStatus[i] = -1;
   }
 
   *((int *)0x28) = (int)syscall_enter;
@@ -96,14 +105,10 @@ int main() {
   //create the first user task
   active = NULL;
   Create_sys(6, firstTask);
-  active = dequeue(readyQueue);
-  active->state = ACTIVE;
+  active = getNextTask();
 
   int startTime, endTime;
   while(active != NULL) {
-    if(active->ID == 0) {
-      DEBUGPRINT("scheduling first task\r");
-    }
     startTime = *counterValue;
     getNextRequest(active, activeRequest);
     endTime = *counterValue;
@@ -119,10 +124,12 @@ int main() {
   }
 
   //turn off interupts and clocks
-  int *ICU1Clear = (int *)(ICU1_BASE + ENCL_OFFSET);
+  //int *ICU1Clear = (int *)(ICU1_BASE + ENCL_OFFSET);
   int *ICU2Clear = (int *)(ICU2_BASE + ENCL_OFFSET);
-  *ICU1Clear &= (UART1RX_MASK | UART1TX_MASK | UART2RX_MASK | UART2TX_MASK);
+  //*ICU1Clear &= (UART1RX_MASK | UART1TX_MASK | UART2RX_MASK | UART2TX_MASK);
+  //*ICU1Clear = (UART2RX_MASK | UART2TX_MASK);
   *ICU2Clear &= CLK3_MASK;
+  //*UART2Control &= ~(RIEN_MASK | TIEN_MASK);
   *clockControl &= ~(TIMER4_ENABLE_MASK);
   clockControl = (int *)(TIMER3_BASE + CRTL_OFFSET);
   *clockControl &= ~(ENABLE_MASK);
@@ -289,7 +296,11 @@ void handle(struct Request *request) {
       active = getNextTask();
       break;
     case AWAITEVENT:
-      if(waitingTasks[request->arg1] == NULL) {
+      if(eventStatus[request->arg1] != -1) {
+	*(active->SP) = eventStatus[request->arg1];
+	eventStatus[request->arg1] = -1;
+	makeTaskReady(active);
+      }else if(waitingTasks[request->arg1] == NULL) {
 	waitingTasks[request->arg1] = active;
 	active->state = EVT_BL;
 	active->event = request->arg1;
@@ -381,17 +392,26 @@ void handleInterrupt() {
   int *ICU1Status = (int *)(ICU1_BASE + STAT_OFFSET);
   int *ICU2Status = (int *)(ICU2_BASE + STAT_OFFSET);
   if(*ICU1Status & UART2RX_MASK) {
-    DEBUGPRINT("RX IRQ\r");
+    bwprintf(COM2, "input int\r");
     int *UART2Data = (int *)(UART2_BASE + UART_DATA_OFFSET);
     if(waitingTasks[TERMIN_EVENT] != NULL) {
       *(waitingTasks[TERMIN_EVENT]->SP) = *UART2Data & DATA_MASK;
       makeTaskReady(waitingTasks[TERMIN_EVENT]);
       waitingTasks[TERMIN_EVENT] = NULL;
     }else{
-      int garbage = *UART2Data;
+      eventStatus[TERMIN_EVENT] = *UART2Data;
     }
   }else if(*ICU1Status & UART2TX_MASK) {
-    
+    bwprintf(COM2, "output int\r");
+    int *UART2Control = (int *)(UART2_BASE + UART_CTLR_OFFSET);
+    *UART2Control &= ~(TIEN_MASK);
+    if(waitingTasks[TERMOUT_EVENT] != NULL) {
+      *(waitingTasks[TERMOUT_EVENT]->SP) = 0;
+      makeTaskReady(waitingTasks[TERMOUT_EVENT]);
+      waitingTasks[TERMOUT_EVENT] = NULL;
+    }else{
+      eventStatus[TERMOUT_EVENT] = 0;
+    }
   }else if(*ICU2Status & CLK3_MASK) {
     int *clockClear = (int *)(TIMER3_BASE + CLR_OFFSET);
     *clockClear = 0;
@@ -399,6 +419,8 @@ void handleInterrupt() {
       *(waitingTasks[CLOCK_EVENT]->SP) = 0;
       makeTaskReady(waitingTasks[CLOCK_EVENT]);
       waitingTasks[CLOCK_EVENT] = NULL;
+    }else{
+      eventStatus[CLOCK_EVENT] = 0;
     }
   }
 }

@@ -56,8 +56,7 @@ void CSInit() {
 	break;
       case CSDELAY:
 	msg.ticks += ticks;
-      case CSDELAYUNTIL:	//add waiting task
-	
+      case CSDELAYUNTIL:	//add waiting task	
 	if(msg.ticks <= ticks) {
 	  reply = 0;
 	  Reply(src, (char *)&reply, sizeof(int));
