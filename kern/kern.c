@@ -40,7 +40,7 @@ int main() {
   eventStatus = keventStatus;
 
   //initialize clock
-  int *clockControl = (int *)(TIMER3_BASE + CRTL_OFFSET);
+/*  int *clockControl = (int *)(TIMER3_BASE + CRTL_OFFSET);
   int *clockLoad = (int *)(TIMER3_BASE + LDR_OFFSET);
   *clockControl = MODE_MASK | CLKSEL_MASK;
   *clockLoad = 5079;
@@ -52,7 +52,7 @@ int main() {
   clockControl = (int *)(TIMER4_HIGH);
   *clockControl &= TIMER4_ENABLE_MASK;
   int *counterValue = (int *)(TIMER4_LOW);
-  totalTime = 0;
+  totalTime = 0;*/
 
   //turn off the FIFOs
   int *UART2Control = (int *)(UART2_BASE + UART_LCRH_OFFSET);
@@ -99,11 +99,11 @@ int main() {
 
   int startTime, endTime;
   while(active != NULL) {
-    startTime = *counterValue;
+    //startTime = *counterValue;
     getNextRequest(active, activeRequest);
-    endTime = *counterValue;
-    active->totalTime += endTime - startTime;
-    totalTime += endTime - startTime;
+    //endTime = *counterValue;
+    //active->totalTime += endTime - startTime;
+    //totalTime += endTime - startTime;
     handle(activeRequest);
   }
 
@@ -114,14 +114,14 @@ int main() {
   }
 
   //turn off interupts and clocks
-  int *intClear = (int *)(ICU2_BASE + ENCL_OFFSET);
+  /*int *intClear = (int *)(ICU2_BASE + ENCL_OFFSET);
   *intClear &= CLK3_MASK;
   *clockControl &= ~(TIMER4_ENABLE_MASK);
   clockControl = (int *)(TIMER3_BASE + CRTL_OFFSET);
   *clockControl &= ~(ENABLE_MASK);
 
   //turn back on the FIFOs
-  *UART2Control |= FEN_MASK;
+  *UART2Control |= FEN_MASK;*/
 
   return 0;
 }
@@ -347,6 +347,7 @@ void handle(struct Request *request) {
       break;
     case SHUTDOWN:
       active = NULL;
+      break;
   }
 }
 

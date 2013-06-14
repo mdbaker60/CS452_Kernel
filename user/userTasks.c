@@ -8,14 +8,13 @@
 #include <io.h>
 
 void driver() {
-  ShutDown();
+  bwprintf(COM2, "driver is running - system about to shut down\r");
+  Shutdown();
 }
 
 void firstTask() {
   Create(6, NSInit);
   Create(6, CSInit);
-  Create(6, InputInit);
-  Create(6, OutputInit);
   Create(0, idleTask);
   Create(1, driver);
 
