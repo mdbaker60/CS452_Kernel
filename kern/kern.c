@@ -46,18 +46,18 @@ int main() {
   *clockLoad = 5079;
   *clockControl |= ENABLE_MASK;
   //initialize the UARTs
-  //int *UART2Control = (int *)(UART2_BASE + UART_CTLR_OFFSET);
-  //int *UART2Flags = (int *)(UART2_BASE + UART_FLAG_OFFSET);
-  //int *UART2Data = (int *)(UART2_BASE + UART_DATA_OFFSET);
-  //*UART2Control |= (RIEN_MASK);
-  //if(*UART2Flags & RXFF_MASK) {
-  //  totalTime = *UART2Data;
-  //}
+  int *UART2Control = (int *)(UART2_BASE + UART_CTLR_OFFSET);
+  int *UART2Flags = (int *)(UART2_BASE + UART_FLAG_OFFSET);
+  int *UART2Data = (int *)(UART2_BASE + UART_DATA_OFFSET);
+  *UART2Control |= (RIEN_MASK);
+  if(*UART2Flags & RXFF_MASK) {
+    totalTime = *UART2Data;
+  }
   //turn on interrupts from the clock and the UARTs
-  //int *ICU1Control = (int *)(ICU1_BASE + ENBL_OFFSET);
+  int *ICU1Control = (int *)(ICU1_BASE + ENBL_OFFSET);
   int *ICU2Control = (int *)(ICU2_BASE + ENBL_OFFSET);
-  //*ICU1Control |= (UART1RX_MASK | UART1TX_MASK | UART2RX_MASK | UART2TX_MASK);
-  //*ICU1Control = (UART2RX_MASK | UART2TX_MASK);
+  *ICU1Control |= (UART1RX_MASK | UART1TX_MASK | UART2RX_MASK | UART2TX_MASK);
+  *ICU1Control = (UART2RX_MASK | UART2TX_MASK);
   *ICU2Control |= CLK3_MASK;
   //enable the 40-bit clock
   clockControl = (int *)(TIMER4_HIGH);
@@ -124,12 +124,12 @@ int main() {
   }
 
   //turn off interupts and clocks
-  //int *ICU1Clear = (int *)(ICU1_BASE + ENCL_OFFSET);
+  int *ICU1Clear = (int *)(ICU1_BASE + ENCL_OFFSET);
   int *ICU2Clear = (int *)(ICU2_BASE + ENCL_OFFSET);
-  //*ICU1Clear &= (UART1RX_MASK | UART1TX_MASK | UART2RX_MASK | UART2TX_MASK);
-  //*ICU1Clear = (UART2RX_MASK | UART2TX_MASK);
+  *ICU1Clear &= (UART1RX_MASK | UART1TX_MASK | UART2RX_MASK | UART2TX_MASK);
+  *ICU1Clear = (UART2RX_MASK | UART2TX_MASK);
   *ICU2Clear &= CLK3_MASK;
-  //*UART2Control &= ~(RIEN_MASK | TIEN_MASK);
+  *UART2Control &= ~(RIEN_MASK | TIEN_MASK);
   *clockControl &= ~(TIMER4_ENABLE_MASK);
   clockControl = (int *)(TIMER3_BASE + CRTL_OFFSET);
   *clockControl &= ~(ENABLE_MASK);
@@ -217,8 +217,6 @@ void handle(struct Request *request) {
       active = getNextTask();
       break;
     case SEND:
-      bwprintf(COM2, "*");
-      bwprintf(COM2, "%d->%d\r", active->ID, request->arg1);
       if((request->arg1 & INDEX_MASK) >= MAXTASKS) {			//impossible TID
 	*(active->SP) = -1;
 	makeTaskReady(active);
@@ -231,7 +229,6 @@ void handle(struct Request *request) {
 	*(active->SP) = -3;
 	makeTaskReady(active);
       }else if(taskArray[request->arg1 & INDEX_MASK].state == SND_BL) {
-	bwprintf(COM2, "!\r");
         struct Task *receiverTask = &taskArray[request->arg1 & INDEX_MASK];
         memcpy(receiverTask->messageBuffer, (char *)request->arg2, 
 		MIN(receiverTask->messageLength, request->arg3));
@@ -395,7 +392,6 @@ void handleInterrupt() {
   int *ICU1Status = (int *)(ICU1_BASE + STAT_OFFSET);
   int *ICU2Status = (int *)(ICU2_BASE + STAT_OFFSET);
   if(*ICU1Status & UART2RX_MASK) {
-    bwprintf(COM2, "input int\r");
     int *UART2Data = (int *)(UART2_BASE + UART_DATA_OFFSET);
     if(waitingTasks[TERMIN_EVENT] != NULL) {
       *(waitingTasks[TERMIN_EVENT]->SP) = *UART2Data & DATA_MASK;
@@ -405,7 +401,6 @@ void handleInterrupt() {
       eventStatus[TERMIN_EVENT] = *UART2Data;
     }
   }else if(*ICU1Status & UART2TX_MASK) {
-    bwprintf(COM2, "output int\r");
     int *UART2Control = (int *)(UART2_BASE + UART_CTLR_OFFSET);
     *UART2Control &= ~(TIEN_MASK);
     if(waitingTasks[TERMOUT_EVENT] != NULL) {
