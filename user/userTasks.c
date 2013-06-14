@@ -14,5 +14,11 @@ void firstTask() {
   Create(6, OutputInit);
   Create(0, idleTask);
 
+  int i;
+  for(i=0; i<5; i++) {
+    bwgetc(COM2);
+    bwputc(COM2, '*');
+  }
+
   Shutdown();
 }

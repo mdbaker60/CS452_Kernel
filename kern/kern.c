@@ -25,16 +25,19 @@ static struct Task **waitingTasks;
 static struct Task *firstFree;
 static struct Task *lastFree;
 static int totalTime;
+static int *eventStatus;
 
 int main() {
   struct Request kactiveRequest;
   struct PriorityQueue kreadyQueue;
   struct Task ktaskArray[MAXTASKS];
   struct Task *kwaitingTasks[NUMEVENTS];
+  int keventStatus[NUMEVENTS];
   activeRequest = &kactiveRequest; 
   readyQueue = &kreadyQueue;
   taskArray = ktaskArray;
   waitingTasks = kwaitingTasks;
+  eventStatus = keventStatus;
 
   //initialize clock
   int *clockControl = (int *)(TIMER3_BASE + CRTL_OFFSET);
@@ -72,6 +75,7 @@ int main() {
   //initialize all wating tasks to NULL
   for(i=0; i<NUMEVENTS; i++) {
     waitingTasks[i] = NULL;
+    eventStatus[i] = -1;
   }
 
   *((int *)0x28) = (int)syscall_enter;
@@ -278,7 +282,11 @@ void handle(struct Request *request) {
       active = getNextTask();
       break;
     case AWAITEVENT:
-      if(waitingTasks[request->arg1] == NULL) {
+      if(eventStatus[request->arg1] != -1) {
+	*(active->SP) = eventStatus[request->arg1];
+	eventStatus[request->arg1] = -1;
+	makeTaskReady(active);
+      }else if(waitingTasks[request->arg1] == NULL) {
 	waitingTasks[request->arg1] = active;
 	active->state = EVT_BL;
 	active->event = request->arg1;
@@ -354,8 +362,8 @@ void makeTaskReady(struct Task *task) {
 }
 
 void handleInterrupt() {
-  int *status = (int *)(ICU2_BASE + STAT_OFFSET);
-  if((int)status | CLK3_MASK) {
+  int *ICU2Status = (int *)(ICU2_BASE + STAT_OFFSET);
+  if(*ICU2Status & CLK3_MASK) {
     int *clockClear = (int *)(TIMER3_BASE + CLR_OFFSET);
     *clockClear = 0;
     if(waitingTasks[CLOCK_EVENT] != NULL) {
