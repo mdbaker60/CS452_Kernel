@@ -29,10 +29,17 @@ getNextRequest:
 	msr	spsr, ip
 	ldr	lr, [r0, #8]
 	mrs	ip, cpsr
-	bic	ip, ip, #0x1F
-	orr	ip, ip, #31
+	orr	ip, ip, #0x1F
 	msr	cpsr_c, ip
 	ldr	sp, [r0]
+	ldr	ip, [sp, #56]
+	mrs	r0, cpsr
+	bic	r0, r0, #0x1F
+	orr	r0, r0, #0x13
+	msr	cpsr_c, r0
+	str	ip, [sp, #-4]
+	orr	r0, r0, #0x1F
+	msr	cpsr_c, r0
 	ldmfd	sp, {r0 - r10, fp, sp, lr}
 	mrs	ip, cpsr
 	bic	ip, ip, #0x1F

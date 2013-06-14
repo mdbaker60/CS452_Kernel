@@ -337,6 +337,8 @@ void handle(struct Request *request) {
       }
       active = getNextTask();
       break;
+    case SHUTDOWN:
+      active = NULL;
   }
 }
 
