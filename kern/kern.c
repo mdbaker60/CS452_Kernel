@@ -116,12 +116,12 @@ int main() {
   }
 
   //turn off interupts and clocks
+  *UART2Control &= ~(RIEN_MASK | TIEN_MASK);
   int *ICU2Clear = (int *)(ICU2_BASE + ENCL_OFFSET);
-  *ICU2Clear &= (CLK3_MASK | UART2_MASK);
+  *ICU2Clear = ICU1_ALL_MASK;
   *clockControl &= ~(TIMER4_ENABLE_MASK);
   clockControl = (int *)(TIMER3_BASE + CRTL_OFFSET);
   *clockControl &= ~(ENABLE_MASK);
-  *UART2Control &= ~(RIEN_MASK);
 
   //turn back on the FIFOs
   *UART2FIFOControl |= FEN_MASK;
