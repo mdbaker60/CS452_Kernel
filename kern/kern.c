@@ -40,23 +40,25 @@ int main() {
   eventStatus = keventStatus;
 
   //initialize clock
-/*  int *clockControl = (int *)(TIMER3_BASE + CRTL_OFFSET);
+  int *clockControl = (int *)(TIMER3_BASE + CRTL_OFFSET);
   int *clockLoad = (int *)(TIMER3_BASE + LDR_OFFSET);
   *clockControl = MODE_MASK | CLKSEL_MASK;
   *clockLoad = 5079;
   *clockControl |= ENABLE_MASK;
-  //turn on clock interrupts
-  int *intControl = (int *)(ICU2_BASE + ENBL_OFFSET);
-  *intControl |= CLK3_MASK;
+  //turn off the FIFOs
+  int *UART2FIFOControl = (int *)(UART2_BASE + UART_LCRH_OFFSET);
+  *UART2FIFOControl &= ~(FEN_MASK);
+  //initialize UARTs
+  int *UART2Control = (int *)(UART2_BASE + UART_CTLR_OFFSET);
+  *UART2Control |= (RIEN_MASK);
+  //turn on interrupts from the clock and UARTs
+  int *ICU2Control = (int *)(ICU2_BASE + ENBL_OFFSET);
+  *ICU2Control |= (CLK3_MASK | UART2_MASK);
   //enable the 40-bit clock
   clockControl = (int *)(TIMER4_HIGH);
   *clockControl &= TIMER4_ENABLE_MASK;
   int *counterValue = (int *)(TIMER4_LOW);
-  totalTime = 0;*/
-
-  //turn off the FIFOs
-  int *UART2Control = (int *)(UART2_BASE + UART_LCRH_OFFSET);
-  *UART2Control &= ~(FEN_MASK);
+  totalTime = 0;
 
   //turn on the caches
   enableCache();
@@ -99,11 +101,11 @@ int main() {
 
   int startTime, endTime;
   while(active != NULL) {
-    //startTime = *counterValue;
+    startTime = *counterValue;
     getNextRequest(active, activeRequest);
-    //endTime = *counterValue;
-    //active->totalTime += endTime - startTime;
-    //totalTime += endTime - startTime;
+    endTime = *counterValue;
+    active->totalTime += endTime - startTime;
+    totalTime += endTime - startTime;
     handle(activeRequest);
   }
 
@@ -114,14 +116,15 @@ int main() {
   }
 
   //turn off interupts and clocks
-  /*int *intClear = (int *)(ICU2_BASE + ENCL_OFFSET);
-  *intClear &= CLK3_MASK;
+  int *ICU2Clear = (int *)(ICU2_BASE + ENCL_OFFSET);
+  *ICU2Clear &= (CLK3_MASK | UART2_MASK);
   *clockControl &= ~(TIMER4_ENABLE_MASK);
   clockControl = (int *)(TIMER3_BASE + CRTL_OFFSET);
   *clockControl &= ~(ENABLE_MASK);
+  *UART2Control &= ~(RIEN_MASK);
 
   //turn back on the FIFOs
-  *UART2Control |= FEN_MASK;*/
+  *UART2FIFOControl |= FEN_MASK;
 
   return 0;
 }
@@ -290,6 +293,10 @@ void handle(struct Request *request) {
 	waitingTasks[request->arg1] = active;
 	active->state = EVT_BL;
 	active->event = request->arg1;
+	if(request->arg1 == TERMOUT_EVENT) {
+	  int *UART2Control = (int *)(UART2_BASE + UART_CTLR_OFFSET);
+	  *UART2Control |= TIEN_MASK;
+	}
       }else{
         *(active->SP) = -4;
 	makeTaskReady(active);
@@ -364,13 +371,37 @@ void makeTaskReady(struct Task *task) {
 
 void handleInterrupt() {
   int *ICU2Status = (int *)(ICU2_BASE + STAT_OFFSET);
-  if(*ICU2Status & CLK3_MASK) {
+  if(*ICU2Status & UART2_MASK) {
+    int *UART2Status = (int *)(UART2_BASE + UART_INTR_OFFSET);
+    if(*UART2Status & RIS_MASK) {
+      int *UART2Data = (int *)(UART2_BASE + UART_DATA_OFFSET);
+      if(waitingTasks[TERMIN_EVENT] != NULL) {
+        *(waitingTasks[TERMIN_EVENT]->SP) = *UART2Data;
+        makeTaskReady(waitingTasks[TERMIN_EVENT]);
+        waitingTasks[TERMIN_EVENT] = NULL;
+      }else{
+        eventStatus[TERMIN_EVENT] = *UART2Data;
+      }
+    }else if(*UART2Status & TIS_MASK) {
+      int *UART2Control = (int *)(UART2_BASE + UART_CTLR_OFFSET);
+      *UART2Control &= ~TIEN_MASK;
+      if(waitingTasks[TERMOUT_EVENT] != NULL) {
+	*(waitingTasks[TERMOUT_EVENT]->SP) = 0;
+	makeTaskReady(waitingTasks[TERMOUT_EVENT]);
+	waitingTasks[TERMOUT_EVENT] = NULL;
+      }else{
+	eventStatus[TERMOUT_EVENT] = 0;
+      }
+    }
+  }else if(*ICU2Status & CLK3_MASK) {
     int *clockClear = (int *)(TIMER3_BASE + CLR_OFFSET);
     *clockClear = 0;
     if(waitingTasks[CLOCK_EVENT] != NULL) {
       *(waitingTasks[CLOCK_EVENT]->SP) = 0;
       makeTaskReady(waitingTasks[CLOCK_EVENT]);
       waitingTasks[CLOCK_EVENT] = NULL;
+    }else{
+      eventStatus[CLOCK_EVENT] = 0;
     }
   }
 }

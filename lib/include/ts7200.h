@@ -17,6 +17,8 @@
 	#define UART1TX_MASK	0x01000000
 	#define UART2RX_MASK	0x02000000
 	#define UART2TX_MASK	0x04000000
+	#define UART1_MASK	0x00100000
+	#define UART2_MASK	0x00400000
 
 #define	TIMER1_BASE	0x80810000
 #define	TIMER2_BASE	0x80810020
@@ -85,6 +87,10 @@
 	#define RXFF_MASK	0x40	// Receive buffer full
 	#define TXFE_MASK	0x80	// Transmit buffer empty
 #define UART_INTR_OFFSET	0x1c
+	#define RTIS_MASK	0x8
+	#define TIS_MASK	0x4
+	#define RIS_MASK	0x2
+	#define MIS_MASK	0x1
 #define UART_DMAR_OFFSET	0x28
 
 // Specific to UART1

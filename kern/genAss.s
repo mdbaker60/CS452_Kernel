@@ -38,6 +38,7 @@ getNextRequest:
 	orr	r0, r0, #0x13
 	msr	cpsr_c, r0
 	str	ip, [sp, #-4]
+	mrs	r0, cpsr
 	orr	r0, r0, #0x1F
 	msr	cpsr_c, r0
 	ldmfd	sp, {r0 - r10, fp, sp, lr}
@@ -101,6 +102,8 @@ syscall_enter:
 	mov	ip, sp
 	sub	sp, sp, #4
 	stmfd	sp!, {r0 - r10, fp, ip, lr}
+	mov	ip, #0
+	str	ip, [sp, #56]
 	mov	r2, sp
 	mrs	ip, cpsr
 	bic	ip, ip, #0x1F
