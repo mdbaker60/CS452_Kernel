@@ -217,6 +217,8 @@ void handle(struct Request *request) {
       active = getNextTask();
       break;
     case SEND:
+      bwprintf(COM2, "*");
+      bwprintf(COM2, "%d->%d\r", active->ID, request->arg1);
       if((request->arg1 & INDEX_MASK) >= MAXTASKS) {			//impossible TID
 	*(active->SP) = -1;
 	makeTaskReady(active);
@@ -229,6 +231,7 @@ void handle(struct Request *request) {
 	*(active->SP) = -3;
 	makeTaskReady(active);
       }else if(taskArray[request->arg1 & INDEX_MASK].state == SND_BL) {
+	bwprintf(COM2, "!\r");
         struct Task *receiverTask = &taskArray[request->arg1 & INDEX_MASK];
         memcpy(receiverTask->messageBuffer, (char *)request->arg2, 
 		MIN(receiverTask->messageLength, request->arg3));

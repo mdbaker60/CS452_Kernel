@@ -9,13 +9,13 @@ struct NSMessage {
   int type;
   char message[100];
 };
-//typedef struct e_struct entry;
+typedef struct e_struct entry;
 
-/*struct e_struct
+struct e_struct
 {
   char name[100];
   int TID;
-};*/
+};
 
 struct BucketEntry {
   char name[100];
@@ -34,19 +34,24 @@ struct HashTable {
   int nextFreeEntry;
 };
 
-void insert(char *name, int TID, struct HashTable *table);
-int retrieve(char *name, struct HashTable *table);
-int getHashValue(char *key);
+//void insert(char *name, int TID, struct HashTable *table);
+//int retrieve(char *name, struct HashTable *table);
+//int getHashValue(char *key);
+void insert(char* name, int TID, entry* table);
+int  retrieve(char* name, entry* table);
 
 int RegisterAs(char *task) {
 //-1 if the nameserver tid is invalid
 //-2 if the nameserver tid is not the nameserver
 //0 success
+  bwprintf(COM2, "task %d registering with name server\r", MyTid());
   struct NSMessage snd;
   int ret;
   snd.type = NSREGISTER;
+  bwprintf(COM2, "about to copy name\r");
   strcpy(snd.message, task);
-  Send(1, (char*)&snd, sizeof(struct NSMessage), (char *) &ret, sizeof(int));	
+  bwprintf(COM2, "message is at location 0x%x, has size 0x%x\r", &snd, sizeof(struct NSMessage));
+  Send(1, (char *)&snd, sizeof(struct NSMessage), (char *)&ret, sizeof(int));
   return 0;
 
 }
@@ -60,7 +65,7 @@ int whoIs(char* task){
   return ret;	
 }
 
-void NSInit(){
+/*void NSInit(){
   int i;
   struct HashTable table;
   for(i=0; i<128; i++) {
@@ -85,9 +90,10 @@ void NSInit(){
 	break;
     }
   }
-}
+}*/
 
-/*  int i;
+void NSInit() {
+  int i;
   entry Table[100];
   for (i = 0; i < 100; i++){
     Table[i].name[0] = '\0';
@@ -108,18 +114,13 @@ void NSInit(){
 	ret = retrieve(in.message, Table);
 	Reply(src, (char *)&ret, sizeof(int));
 	break;
-      case NSSHUTDOWN:
-	Reply(src, (char *)&ret, sizeof(int));
-	int tid = MyTid();
-	Destroy(tid);
-	break;
     }	
   }
-}*/
+}
 
-void insert(char *name, int TID, struct HashTable *table) {
+/*void insert(char *name, int TID, struct HashTable *table) {
   int hash = getHashValue(name) & 0x7F;
-  struct BucketEntry *entry = (table->buckets[hash]).first;
+  struct BucketEntry *entry = (table->buckets)[hash].first;
   //scan for the key in the bucket, and replace if there
   while(entry != NULL && strcmp(entry->name, name) != 0) {
     entry = entry->next;
@@ -130,31 +131,31 @@ void insert(char *name, int TID, struct HashTable *table) {
     newEntry->next = NULL;
     newEntry->TID = TID;
     strcpy(newEntry->name, name);
-    if((table->buckets[hash]).first == NULL) {
-      (table->buckets[hash]).first = (table->buckets[hash]).last = newEntry;
+    if((table->buckets)[hash].first == NULL) {
+      (table->buckets)[hash].first = (table->buckets)[hash].last = newEntry;
     }else{
-      ((table->buckets[hash]).last)->next = newEntry;
-      (table->buckets[hash]).last = newEntry;
+      ((table->buckets)[hash].last)->next = newEntry;
+      (table->buckets)[hash].last = newEntry;
     }
   }else{
     entry->TID = TID;
   }
-}
+}*/
 
-/*void insert(char* name, int TID, entry* table){
+void insert(char* name, int TID, entry* table){
   int i = 0;
   while(table[i].name[0] != '\0'){//Look at later
-    if (strcomp(table[i].name, name, strlen(name))){
+    if (strcmp(table[i].name, name)){
       table[i].TID = TID;
       return;
     }
     ++i;
   }
-  strcp(table[i].name, name, strlen(name));
+  strcpy(table[i].name, name);
   table[i].TID = TID;
-}*/
+}
 
-int retrieve(char *name, struct HashTable *table) {
+/*int retrieve(char *name, struct HashTable *table) {
   int hash = getHashValue(name) & 0x7F;
   struct BucketEntry *entry = (table->buckets[hash]).first;
   while(entry != NULL) {
@@ -165,23 +166,23 @@ int retrieve(char *name, struct HashTable *table) {
   }
 
   return -1;
-}
+}*/
 
-/*int  retrieve(char* name, entry* table){
+int  retrieve(char* name, entry* table){
   int i = 0;
   while (table[i].name[0] != '\0'){
-    if (strcomp(table[i].name, name, strlen(name))){
+    if (strcmp(table[i].name, name)){
       return table[i].TID;
     }
   }
   return -1;
-}*/
+}
 
 int getHashValue(char *key) {
-  int hash = 0;
-  while(*key != '\0') {
-    hash = ((hash << 5) + hash) + (int)*key;
-    key++;
+  int hash = 0, i=0;
+  while(key[i] != '\0') {
+    hash = ((hash << 5) + hash) + (int)key[i];
+    i++;
   }
 
   return hash;
