@@ -31,5 +31,6 @@ void handle(struct Request *request);
 struct Task *getNextTask();
 void makeTaskReady(struct Task *task);
 void handleInterrupt();
+int destroyTask(int Tid);
 
 #endif

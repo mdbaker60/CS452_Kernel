@@ -36,7 +36,7 @@ void CSInit() {
   int notifierTid = Create(7, notifier);
   int eventType = CLOCK_EVENT;
   Send(notifierTid, (char *)&eventType, sizeof(int), (char *)&reply, sizeof(int));
-  RegisterAs("Clock Server");
+  //RegisterAs("Clock Server");
   
   struct WaitingTask *tempTask;
   while(true) {
@@ -95,7 +95,7 @@ void CSInit() {
 int Delay(int ticks) {
   struct CSMessage msg;
   int reply;
-  int clockServer = whoIs("Clock Server");
+  int clockServer = 2;//whoIs("Clock Server");
   msg.type = CSDELAY;
   msg.tid = MyTid();
   msg.ticks = ticks;
@@ -107,7 +107,7 @@ int Delay(int ticks) {
 int Time() {
   struct CSMessage msg;
   int reply;
-  int clockServer = whoIs("Clock Server");
+  int clockServer = 2;//whoIs("Clock Server");
   msg.type = CSGETTIME;
   Send(clockServer, (char *)&msg, sizeof(struct CSMessage), (char *)&reply, sizeof(int));
   return reply;
@@ -116,7 +116,7 @@ int Time() {
 int DelayUntil(int ticks) {
   struct CSMessage msg;
   int reply;
-  int clockServer = whoIs("Clock Server");
+  int clockServer = 2;//whoIs("Clock Server");
   msg.type = CSDELAYUNTIL;
   msg.tid = MyTid();
   msg.ticks = ticks;

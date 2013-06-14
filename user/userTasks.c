@@ -9,21 +9,24 @@
 #include <ts7200.h>
 
 void driver() {
-  int *UART2Data = (int *)(UART2_BASE + UART_DATA_OFFSET);
   int i;
 
+  printf("This is a test number: %d\r", 23456);
+
   while(true) {
-    char c = AwaitEvent(TERMIN_EVENT);
-    AwaitEvent(TERMOUT_EVENT);
-    *UART2Data = (int)c;
-    if(c == 'q') Shutdown();
+    int c = Getc(2);
+    Putc(2, c);
+    if(c == 'q') break;
   }
+
+  Shutdown();
 }
 
 void firstTask() {
   Create(6, NSInit);
   Create(6, CSInit);
   Create(6, InputInit);
+  Create(6, OutputInit);
   Create(0, idleTask);
   Create(1, driver);
 

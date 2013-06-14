@@ -130,7 +130,7 @@ void insert(char *name, int TID, struct HashTable *table) {
   }
 
   if(entry == NULL) {
-    struct BucketEntry *newEntry = &(table->entries[table->nextFreeEntry++]);
+    struct BucketEntry *newEntry = &(table->entries[(table->nextFreeEntry)++]);
     newEntry->next = NULL;
     newEntry->TID = TID;
     strcpy(newEntry->name, name);
