@@ -67,15 +67,19 @@ getNextRequest:
 	.type	fiq_enter, %function
 fiq_enter:
 	str	r0, [sp, #-4]
+	str	r1, [sp, #-8]
+	mov	r1, lr
 	mrs	ip, cpsr
 	bic	ip, ip, #0x1F
 	orr	ip, ip, #0x12
 	msr	cpsr_c, ip
 	str	ip, [sp, #-4]
+	mov	lr, r1
 	bic	ip, ip, #0x1F
 	orr	ip, ip, #0x11
 	msr	cpsr_c, ip
 	ldr	r0, [sp, #-4]
+	ldr	r1, [sp, #-8]
 	b	__fiq_to_int__
 	.size	fiq_enter, .-fiq_enter
 	.align	2
