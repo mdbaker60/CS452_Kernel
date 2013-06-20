@@ -26,11 +26,14 @@ void enableCache();
 int Create_sys(int priority, void (*code)());
 void syscall_enter();
 void int_enter();
+void fiq_enter();
 void getNextRequest(struct Task *task, struct Request *request);
 void handle(struct Request *request);
 struct Task *getNextTask();
 void makeTaskReady(struct Task *task);
 void handleInterrupt();
 int destroyTask(int Tid);
+void kprint(char *str);
+void kOutputChar();
 
 #endif

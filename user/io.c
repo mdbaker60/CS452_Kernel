@@ -103,9 +103,8 @@ int handleNewOutputTask(int *buffer, int *bufHead, int *bufTail, int *available,
     *UARTData = input;
     return true;
   }else{
-    (*bufHead)++;
+    buffer[(*bufHead)++] = input;
     *bufHead %= BUFFERSIZE;
-    buffer[*bufHead] = input;
     return false;
   }
 }
@@ -188,6 +187,13 @@ void printInt(int channel, int n, int base) {
   printUnsignedInt(channel, n, base);
 }
 
+void printString(int channel, char *string) {
+  while(*string != '\0') {
+    Putc(channel, *string);
+    string++;
+  }
+}
+
 void formatString(char *format, va_list va) {
   char ch;
   while((ch = *(format++))) {
@@ -198,6 +204,15 @@ void formatString(char *format, va_list va) {
       switch(ch) {
 	case 'd':
 	  printInt(2, va_arg(va, int), 10);
+	  break;
+	case 's':
+	  printString(2, va_arg(va, char *));
+	  break;
+	case 'c':
+	  Putc(2, va_arg(va, char));
+	  break;
+	case 'x':
+	  printInt(2, va_arg(va, int), 16);
 	  break;
       }
     }

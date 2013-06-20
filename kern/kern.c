@@ -16,7 +16,6 @@
 
 static int *userStacks;
 static int *kernMemStart;
-static int nextTID;
 static struct Task *active;
 static struct PriorityQueue *readyQueue;
 static struct Request *activeRequest;
@@ -27,24 +26,37 @@ static struct Task *lastFree;
 static int totalTime;
 static int *eventStatus;
 
+static char *kernOut;
+static int kOutHead;
+static int kOutTail;
+
+void print() {
+  bwprintf(COM2, "FIQ occured\r");
+}
+
 int main() {
   struct Request kactiveRequest;
   struct PriorityQueue kreadyQueue;
   struct Task ktaskArray[MAXTASKS];
   struct Task *kwaitingTasks[NUMEVENTS];
   int keventStatus[NUMEVENTS];
+  char kOut[1000];
   activeRequest = &kactiveRequest; 
   readyQueue = &kreadyQueue;
   taskArray = ktaskArray;
   waitingTasks = kwaitingTasks;
   eventStatus = keventStatus;
+  kernOut = kOut;
+  kOutHead = kOutTail = 0;
 
   //initialize clock
   int *clockControl = (int *)(TIMER3_BASE + CRTL_OFFSET);
   int *clockLoad = (int *)(TIMER3_BASE + LDR_OFFSET);
-  *clockControl = MODE_MASK | CLKSEL_MASK;
   *clockLoad = 5079;
-  *clockControl |= ENABLE_MASK;
+  *clockControl = MODE_MASK | CLKSEL_MASK | ENABLE_MASK;
+  //initialize the UARTs
+  int *UART2Control = (int *)(UART2_BASE + UART_CTLR_OFFSET);
+  *UART2Control |= RIEN_MASK;
   //turn off the FIFOs
   int *UART2FIFOControl = (int *)(UART2_BASE + UART_LCRH_OFFSET);
   *UART2FIFOControl &= ~(FEN_MASK);
@@ -64,13 +76,14 @@ int main() {
   //so we can identify if they have been
   //created later
   int i;
-  for(i=0; i<MAXTASKS; i++) {
+  for(i=0; i<MAXTASKS-1; i++) {
     taskArray[i].ID = i - GEN_UNIT;
     taskArray[i].next = &taskArray[i+1];
   }
   firstFree = &taskArray[0];
   lastFree = &taskArray[MAXTASKS-1];
   lastFree->next = NULL;
+  lastFree->ID = MAXTASKS - 1 - GEN_UNIT;
   //initialize all wating tasks to NULL
   for(i=0; i<NUMEVENTS; i++) {
     waitingTasks[i] = NULL;
@@ -79,12 +92,14 @@ int main() {
 
   *((int *)0x28) = (int)syscall_enter;
   *((int *)0x38) = (int)int_enter;
-  nextTID = 0;
+  *((int *)0x3C) = (int)fiq_enter;
   kernMemStart = getSP();
   //leave 250KB of stack space for function calls
   kernMemStart -= 0xFA00;
   setIRQ_SP((int)kernMemStart);
-  kernMemStart -= 0x10;		//give IRQ stack 8 words of space
+  kernMemStart -= 0x8;		//give IRQ stack 8 words of space
+  setFIQ_SP((int)kernMemStart);
+  kernMemStart -= 0x8;
 
   initQueue(readyQueue);
   userStacks = kernMemStart - MAXTASKS*(0xFA00);
@@ -113,12 +128,13 @@ int main() {
   }
 
   //turn off interupts and clocks
-  int *UART2Control = (int *)(UART2_BASE + UART_CTLR_OFFSET);
-  *UART2Control &= ~(RIEN_MASK | TIEN_MASK);
-  int *ICU1Clear = (int *)(ICU1_BASE + ENCL_OFFSET);
+  //*UART2Control &= ~(RIEN_MASK | TIEN_MASK);
+  //int *ICU1Clear = (int *)(ICU1_BASE + ENCL_OFFSET);
   int *ICU2Clear = (int *)(ICU2_BASE + ENCL_OFFSET);
-  *ICU1Clear = ICU1_ALL_MASK;
-  *ICU2Clear = ICU2_ALL_MASK;
+  //*ICU2Control = 0x0;
+  //i*ICU1Clear = ICU1_ALL_MASK;
+  //*ICU2Clear = ICU2_ALL_MASK;
+  *ICU2Clear = (CLK3_MASK | UART2_MASK);
   *clockControl &= ~(TIMER4_ENABLE_MASK);
   clockControl = (int *)(TIMER3_BASE + CRTL_OFFSET);
   *clockControl &= ~(ENABLE_MASK);
@@ -297,9 +313,6 @@ void handle(struct Request *request) {
 	if(request->arg1 == TERMOUT_EVENT) {
 	  int *UART2Control = (int *)(UART2_BASE + UART_CTLR_OFFSET);
 	  *UART2Control |= TIEN_MASK;
-	}else if(request->arg1 == TERMIN_EVENT) {
-	  int *UART2Control = (int *)(UART2_BASE + UART_CTLR_OFFSET);
-	  *UART2Control |= RIEN_MASK;
 	}
       }else{
         *(active->SP) = -4;
@@ -399,8 +412,6 @@ void handleInterrupt() {
     int *UART2Status = (int *)(UART2_BASE + UART_INTR_OFFSET);
     if(*UART2Status & RIS_MASK) {
       int *UART2Data = (int *)(UART2_BASE + UART_DATA_OFFSET);
-      int *UART2Control = (int *)(UART2_BASE + UART_CTLR_OFFSET);
-      *UART2Control &= ~RIEN_MASK;
       if(waitingTasks[TERMIN_EVENT] != NULL) {
         *(waitingTasks[TERMIN_EVENT]->SP) = *UART2Data;
         makeTaskReady(waitingTasks[TERMIN_EVENT]);
@@ -409,6 +420,10 @@ void handleInterrupt() {
         eventStatus[TERMIN_EVENT] = *UART2Data;
       }
     }else if(*UART2Status & TIS_MASK) {
+      if(kOutHead != kOutTail) {
+	kOutputChar();
+	return;
+      }
       int *UART2Control = (int *)(UART2_BASE + UART_CTLR_OFFSET);
       *UART2Control &= ~TIEN_MASK;
       if(waitingTasks[TERMOUT_EVENT] != NULL) {
@@ -438,5 +453,30 @@ void handleInterrupt() {
     }else{
       eventStatus[CLOCK_EVENT] = 0;
     }
+  }
+}
+
+
+void kprint(char *str) {
+  while(*str != '\0') {
+    kernOut[kOutHead++] = *str;
+    kOutHead %= 1000;
+    ++str;
+  }
+
+  //turn on interrupts
+  int *UART2Control = (int *)(UART2_BASE + UART_CTLR_OFFSET);
+  *UART2Control |= TIEN_MASK;
+}
+
+void kOutputChar() {
+  int *UART2Data = (int *)(UART2_BASE + UART_DATA_OFFSET);
+  *UART2Data = kernOut[kOutTail++];
+  kOutTail %= 1000;
+
+  //possible disable interrupts
+  if(kOutHead == kOutTail && waitingTasks[TERMOUT_EVENT] == NULL) {
+    int *UART2Control = (int *)(UART2_BASE + UART_CTLR_OFFSET);
+    *UART2Control &= ~TIEN_MASK;
   }
 }
