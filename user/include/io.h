@@ -23,9 +23,12 @@ void OutputInit();
 int Getc(int channel);
 int Putc(int channel, char ch);
 
+void printString(int channel, char *string);
 void printUnsignedInt(int channel, unsigned int n, int base);
 void printInt(int channel, int n, int base);
 void formatString(char *format, va_list va);
 void printf(char *format, ...);
+void outputEscape(char *escape);
+void sendTrainCommand(int command);
 
 #endif

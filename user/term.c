@@ -27,6 +27,7 @@ void parseCommand(char *command) {
   }else{
     printf("\rUnrecognized command: \"%s\"\r", command);
   }
+  Putc(2, '>');
 }
 
 void terminalDriver() {
@@ -34,6 +35,7 @@ void terminalDriver() {
   int commandLength = 0;
   char c;
 
+  Putc(2, '>');
   while(true) {
     c = (char)Getc(2);
     switch(c) {
@@ -41,6 +43,10 @@ void terminalDriver() {
 	curCommand[commandLength] = '\0';
 	parseCommand(curCommand);
 	commandLength = 0;
+	break;
+      case '\x8':
+	commandLength--;
+	outputEscape("[1D[K");
 	break;
       default:
 	if(commandLength < BUFFERSIZE - 1) {

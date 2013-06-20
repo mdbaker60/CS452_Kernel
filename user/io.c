@@ -226,3 +226,23 @@ void printf(char *format, ...) {
   formatString(format, va);
   va_end(va);
 }
+
+void outputEscape(char *escape) {
+  while(*escape != '\0') {
+    if(*escape == '[') {
+      Putc(2, '\x1B');
+      Putc(2, '[');
+    }else{
+      Putc(2, *escape);
+    }
+    escape++;
+  }
+}
+
+void sendTrainCommand(int command) {
+  char first = command & 0xFF00;
+  char second = command & 0xFF;
+
+  Putc(1, first);
+  Putc(1, second);
+}
