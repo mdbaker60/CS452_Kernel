@@ -51,14 +51,22 @@ int main() {
   *clockLoad = 5079;
   *clockControl = MODE_MASK | CLKSEL_MASK | ENABLE_MASK;
   //initialize the UARTs
+  int *UART1Control = (int *)(UART1_BASE + UART_CTLR_OFFSET);
   int *UART2Control = (int *)(UART2_BASE + UART_CTLR_OFFSET);
+  *UART1Control |= (RIEN_MASK | MSIEN_MASK);
   *UART2Control |= RIEN_MASK;
-  //turn off the FIFOs
-  int *UART2FIFOControl = (int *)(UART2_BASE + UART_LCRH_OFFSET);
-  *UART2FIFOControl &= ~(FEN_MASK);
+  //turn off the FIFOs, and set UART1's baud rate
+  int *UART1LineControlLow = (int *)(UART1_BASE + UART_LCRL_OFFSET);
+  int *UART1LineControlMid = (int *)(UART1_BASE + UART_LCRM_OFFSET);
+  int *UART1LineControlHigh = (int *)(UART1_BASE + UART_LCRH_OFFSET);
+  int *UART2LineControlHigh = (int *)(UART2_BASE + UART_LCRH_OFFSET);
+  *UART1LineControlLow = (*UART1LineControlLow & ~BRDL_MASK) | 0xBF;
+  *UART1LineControlMid &= ~BRDH_MASK;
+  *UART1LineControlHigh = (*UART1LineControlHigh & ~BRK_MASK & ~PEN_MASK & ~FEN_MASK) | WLEN_MASK | STP2_MASK;
+  *UART2LineControlHigh &= ~(FEN_MASK);
   //turn on interrupts from the clock and UARTs
   int *ICU2Control = (int *)(ICU2_BASE + ENBL_OFFSET);
-  *ICU2Control |= (CLK3_MASK | UART2_MASK);
+  *ICU2Control |= (CLK3_MASK | UART2_MASK | UART1_MASK);
   //enable the 40-bit clock
   clockControl = (int *)(TIMER4_HIGH);
   *clockControl &= TIMER4_ENABLE_MASK;
@@ -122,19 +130,18 @@ int main() {
   }
 
   //turn off interupts and clocks
-  //*UART2Control &= ~(RIEN_MASK | TIEN_MASK);
-  //int *ICU1Clear = (int *)(ICU1_BASE + ENCL_OFFSET);
+  *UART1Control &= ~(RIEN_MASK | TIEN_MASK);
+  *UART2Control &= ~(RIEN_MASK | TIEN_MASK);
   int *ICU2Clear = (int *)(ICU2_BASE + ENCL_OFFSET);
-  //*ICU2Control = 0x0;
-  //i*ICU1Clear = ICU1_ALL_MASK;
-  //*ICU2Clear = ICU2_ALL_MASK;
-  *ICU2Clear = (CLK3_MASK | UART2_MASK);
+  *ICU2Control = 0x0;
+  *ICU2Clear = (CLK3_MASK | UART2_MASK | UART1_MASK);
   *clockControl &= ~(TIMER4_ENABLE_MASK);
   clockControl = (int *)(TIMER3_BASE + CRTL_OFFSET);
   *clockControl &= ~(ENABLE_MASK);
 
   //turn back on the FIFOs
-  *UART2FIFOControl |= FEN_MASK;
+  *UART1LineControlHigh |= FEN_MASK;
+  *UART2LineControlHigh |= FEN_MASK;
 
   return 0;
 }
@@ -307,7 +314,10 @@ void handle(struct Request *request) {
 	if(request->arg1 == TERMOUT_EVENT) {
 	  int *UART2Control = (int *)(UART2_BASE + UART_CTLR_OFFSET);
 	  *UART2Control |= TIEN_MASK;
-	}
+	}else if(request->arg1 == TRAIOUT_EVENT) {
+	  int *UART1Control = (int *)(UART1_BASE + UART_CTLR_OFFSET);
+	  *UART1Control |= TIEN_MASK;
+ 	}
       }else{
         *(active->SP) = -4;
 	makeTaskReady(active);
@@ -428,28 +438,34 @@ void handleInterrupt() {
 	eventStatus[TERMOUT_EVENT] = 0;
       }
     }
-
   }else if(*ICU2Status & UART1_MASK){
-    int *UART1_FLAG = (int *)UART1_BASE + UART_FLAG_OFFSET;
-    int *UART1_STATUS = (int *)UART1_BASE + UART_INTR_OFFSET;
-    if (*UART1_FLAG & CTS_MASK){
-      if(waitingTasks[TRAICTS_EVENT] != NULL) {
-       makeTaskReady(waitingTasks[TRAICTS_EVENT]);
-       waitingTasks[TRAICTS_EVENT] = NULL; 
+    int *UART1_STATUS = (int *)(UART1_BASE + UART_INTR_OFFSET);
+    if (*UART1_STATUS & MIS_MASK) {
+      if(waitingTasks[TRAIMOD_EVENT] != NULL) {
+       makeTaskReady(waitingTasks[TRAIMOD_EVENT]);
+       waitingTasks[TRAIMOD_EVENT] = NULL; 
       }
-    }
-    else if (*UART1_STATUS & RIS_MASK){
-      int *UART1_DATA = (int *)UART1_BASE + UART_DATA_OFFSET; 
+      *UART1_STATUS = 0;	//lower interrupt
+    }else if (*UART1_STATUS & RIS_MASK){
+      int *UART1_DATA = (int *)(UART1_BASE + UART_DATA_OFFSET);
       if (waitingTasks[TRAIIN_EVENT] != NULL){
         *(waitingTasks[TRAIIN_EVENT] -> SP) = *UART1_DATA; 
         makeTaskReady(waitingTasks[TRAIIN_EVENT]);
 	waitingTasks[TRAIIN_EVENT] = NULL;
-      }
-      else{
+      }else{
         eventStatus[TRAIIN_EVENT] = *UART1_DATA;
       }
-    }
-    
+    }else if(*UART1_STATUS & TIS_MASK) {
+      int *UART1Control = (int *)(UART1_BASE + UART_CTLR_OFFSET);
+      *UART1Control &= ~TIEN_MASK;
+      if(waitingTasks[TRAIOUT_EVENT] != NULL) {
+	*(waitingTasks[TRAIOUT_EVENT]->SP) = 0;
+	makeTaskReady(waitingTasks[TRAIOUT_EVENT]);
+	waitingTasks[TRAIOUT_EVENT] = NULL;
+      }else{
+	eventStatus[TRAIOUT_EVENT] = 0;
+      }
+    } 
   }else if(*ICU2Status & CLK3_MASK) {
     int *clockClear = (int *)(TIMER3_BASE + CLR_OFFSET);
     *clockClear = 0;

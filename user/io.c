@@ -82,8 +82,7 @@ void InputInit() {
         nodes[src & 0x7F].tid = src;
 	if (msg.channel == 1){
 	  handleNewInputTask(&first[0], &last[0], buffer1, bufHead[0], &bufTail[0], &nodes[src & 0x7F]);
-	}
-	if(msg.channel == 2) {
+	}else if(msg.channel == 2) {
 	  handleNewInputTask(&first[1], &last[1], buffer2, bufHead[1], &bufTail[1], &nodes[src & 0x7F]);
 	}
 	break;
@@ -91,8 +90,8 @@ void InputInit() {
   }
 }
 
-int handleNewOutput(int *buffer, int *bufHead, int *bufTail, int *available, int UARTBase) {
-  if(*bufTail == *bufHead) {
+int handleNewOutput(int *buffer, int *bufHead, int *bufTail, int *available, int UARTBase, int cts) {
+  if(*bufTail == *bufHead || !cts) {
     *available = true;
     return false;
   }else{
@@ -104,8 +103,8 @@ int handleNewOutput(int *buffer, int *bufHead, int *bufTail, int *available, int
 }
 
 int handleNewOutputTask(int *buffer, int *bufHead, int *bufTail, int *available, int UARTBase,
-	int input) {
-  if(*available) {
+	int cts, int input) {
+  if(*available && cts) {
     *available = false;
     int *UARTData = (int *)(UARTBase + UART_DATA_OFFSET);
     *UARTData = input;
@@ -119,7 +118,7 @@ int handleNewOutputTask(int *buffer, int *bufHead, int *bufTail, int *available,
 
 void OutputInit() {
   struct IOMessage msg;
-  int reply=0, src, ctsStatus=1; //assuming CTS defaults to on
+  int reply=0, src, ctsState=1; //assuming CTS defaults to on
   int buffer1[BUFFERSIZE];
   int buffer2[BUFFERSIZE];
   int bufHead[2] = {0, 0};
@@ -132,22 +131,34 @@ void OutputInit() {
   int eventType = TERMOUT_EVENT;
   Send(notifier2Tid, (char *)&eventType, sizeof(int), (char *)&reply, sizeof(int));
   eventType = TRAIOUT_EVENT;
-  Send(notifier1Tid, (char*)&eventType, sizeof(int), (char*)&reply, sizeof(int)); 
-  eventType = TRAICTS_EVENT;
-  Send(notifierCTSTid, (char*)&eventType, sizeof(int), (char*)&reply, sizeof(int));
+  Send(notifier1Tid, (char *)&eventType, sizeof(int), (char *)&reply, sizeof(int)); 
+  eventType = TRAIMOD_EVENT;
+  Send(notifierCTSTid, (char *)&eventType, sizeof(int), (char *)&reply, sizeof(int));
   RegisterAs("Output Server");
 
   while(true) {
     Receive(&src, (char *)&msg, sizeof(struct IOMessage));
     switch(msg.type) {
       case IONOTIFIER:
-	if (src == notifierCTSTid){
-	  ctsStatus = 1;
-	  if(handleNewOutput(buffer1, &bufHead[0], &bufTail[0], &available[0], UART1_BASE)) {
+	if (src == notifierCTSTid) {
+	  Reply(notifierCTSTid, (char *)&reply, sizeof(int));
+	  int *UART1_FLAGS = (int *)(UART1_BASE + UART_FLAG_OFFSET);
+	  if(*UART1_FLAGS & CTS_MASK) {
+	    ctsState = 1;
+	    if(bufHead[0] != bufTail[0] && available[0]) {
+	      int *UART1_DATA = (int *)(UART1_BASE + UART_DATA_OFFSET);
+	      *UART1_DATA = buffer1[bufTail[0]];
+	      bufTail[0]++;
+	      bufTail[0] %= BUFFERSIZE;
+	    }
+ 	  }
+	}else if(src == notifier1Tid) {
+	  if(handleNewOutput(buffer1, &bufHead[0], &bufTail[0], &available[0], UART1_BASE, ctsState)) {
 	    Reply(notifier1Tid, (char *)&reply, sizeof(int));
-	  } 
+	    ctsState = 0;
+	  }
 	}else if(src == notifier2Tid) {
-	  if(handleNewOutput(buffer2, &bufHead[1], &bufTail[1], &available[1], UART2_BASE)) {
+	  if(handleNewOutput(buffer2, &bufHead[1], &bufTail[1], &available[1], UART2_BASE, 1)) {
 	    Reply(notifier2Tid, (char *)&reply, sizeof(int));
 	  } 
 	}
@@ -155,12 +166,12 @@ void OutputInit() {
 
       case IOOUTPUT:
 	if (msg.channel == 1){
-	 if(handleNewOutputTask(buffer1, &bufHead[0], &bufTail[0], &available[0], UART1_BASE, msg.data)){
-	    ctsStatus = 0;
+	  if(handleNewOutputTask(buffer1, &bufHead[0], &bufTail[0], &available[0], UART1_BASE, ctsState, msg.data)){
 	    Reply(notifier1Tid, (char *)&reply, sizeof(int));
+	    ctsState = 0;
 	  } 
 	}else if(msg.channel == 2) {
-	  if(handleNewOutputTask(buffer2, &bufHead[1], &bufTail[1], &available[1], UART2_BASE, msg.data)) {
+	  if(handleNewOutputTask(buffer2, &bufHead[1], &bufTail[1], &available[1], UART2_BASE, 1, msg.data)) {
 	    Reply(notifier2Tid, (char *)&reply, sizeof(int));
 	  }
 	}
@@ -265,8 +276,8 @@ void outputEscape(char *escape) {
 }
 
 void sendTrainCommand(int command) {
-  char first = command & 0xFF00;
   char second = command & 0xFF;
+  char first = command >> 8;
 
   Putc(1, first);
   Putc(1, second);

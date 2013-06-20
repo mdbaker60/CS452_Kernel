@@ -10,4 +10,4 @@
 #define TERMOUT_EVENT	2
 #define TRAIIN_EVENT	3
 #define TRAIOUT_EVENT	4
-#define TRAICTS_EVENT	5
+#define TRAIMOD_EVENT	5
