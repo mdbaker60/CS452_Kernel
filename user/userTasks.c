@@ -18,6 +18,7 @@ void driver() {
     Putc(2, c);
     if(c == 'q') break;
   }
+  Putc(2, '$');
 
   Shutdown();
 }

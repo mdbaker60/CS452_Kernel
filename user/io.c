@@ -61,7 +61,7 @@ void InputInit() {
   int notifier2Tid = Create(7, notifier);
   int eventType = TERMIN_EVENT;
   Send(notifier2Tid, (char *)&eventType, sizeof(int), (char *)&reply, sizeof(int));
-  //RegisterAs("Input Server");
+  RegisterAs("Input Server");
 
   while(true) {
     Receive(&src, (char *)&msg, sizeof(struct IOMessage));
@@ -83,39 +83,29 @@ void InputInit() {
   }
 }
 
-int handleNewOutput(struct IONode **first, struct IONode *last, int *available, int UARTBase) {
-  if(*first == NULL) {
+int handleNewOutput(int *buffer, int *bufHead, int *bufTail, int *available, int UARTBase) {
+  if(*bufTail == *bufHead) {
     *available = true;
     return false;
   }else{
     int *UARTData = (int *)(UARTBase + UART_DATA_OFFSET);
-    *UARTData = (*first)->data;
-    int reply = 0;
-    Reply((*first)->tid, (char *)&reply, sizeof(int));
-    *first = (*first)->next;
+    *UARTData = buffer[(*bufTail)++];
+    *bufTail %= BUFFERSIZE;
     return true;
   }
 }
 
-int handleNewOutputTask(struct IONode **first, struct IONode **last, int *available, int UARTBase,
-	struct IONode *myNode) {
+int handleNewOutputTask(int *buffer, int *bufHead, int *bufTail, int *available, int UARTBase,
+	int input) {
   if(*available) {
     *available = false;
-    int *UARTControl = (int *)(UARTBase + UART_CTLR_OFFSET);
     int *UARTData = (int *)(UARTBase + UART_DATA_OFFSET);
-    *UARTData = myNode->data;
-    *UARTControl |= TIEN_MASK;
-    int reply = 0;
-    Reply(myNode->tid, (char *)&reply, sizeof(int));
+    *UARTData = input;
     return true;
   }else{
-    if(*first == NULL) {
-      *first = *last = myNode;
-    }else{
-      (*last)->next = myNode;
-      *last = myNode;
-    }
-    myNode->next = NULL;
+    (*bufHead)++;
+    *bufHead %= BUFFERSIZE;
+    buffer[*bufHead] = input;
     return false;
   }
 }
@@ -123,34 +113,34 @@ int handleNewOutputTask(struct IONode **first, struct IONode **last, int *availa
 void OutputInit() {
   struct IOMessage msg;
   int reply=0, src;
-  struct IONode nodes[100];
-  struct IONode *first[2] = {NULL, NULL};
-  struct IONode *last[2] = {NULL, NULL};
+  int buffer1[BUFFERSIZE];
+  int buffer2[BUFFERSIZE];
+  int bufHead[2] = {0, 0};
+  int bufTail[2] = {0, 0};
   int available[2] = {false, false};
 
   int notifier2Tid = Create(7, notifier);
   int eventType = TERMOUT_EVENT;
   Send(notifier2Tid, (char *)&eventType, sizeof(int), (char *)&reply, sizeof(int));
-  //RegisterAs("Output Server");
+  RegisterAs("Output Server");
 
   while(true) {
     Receive(&src, (char *)&msg, sizeof(struct IOMessage));
     switch(msg.type) {
       case IONOTIFIER:
 	if(src == notifier2Tid) {
-	  if(handleNewOutput(&first[1], last[1], &available[1], UART2_BASE)) {
+	  if(handleNewOutput(buffer2, &bufHead[1], &bufTail[1], &available[1], UART2_BASE)) {
 	    Reply(notifier2Tid, (char *)&reply, sizeof(int));
 	  } 
 	}
 	break;
       case IOOUTPUT:
-	nodes[src & 0x7F].tid = src;
-	nodes[src & 0x7F].data = msg.data;
 	if(msg.channel == 2) {
-	  if(handleNewOutputTask(&first[1], &last[1], &available[1], UART2_BASE, &nodes[src & 0x7F])) {
+	  if(handleNewOutputTask(buffer2, &bufHead[1], &bufTail[1], &available[1], UART2_BASE, msg.data)) {
 	    Reply(notifier2Tid, (char *)&reply, sizeof(int));
 	  }
 	}
+	Reply(src, (char *)&reply, sizeof(int));
 	break;
     }
   }
@@ -161,8 +151,7 @@ int Getc(int channel) {
   msg.type = IOINPUT;
   msg.channel = channel;
   int c;
-  //Send(whoIs("Input Server"), (char *)&msg, sizeof(struct IOMessage), (char *)&c, sizeof(int));
-  Send(4, (char*)&msg, sizeof(struct IOMessage), (char *)&c, sizeof(int));
+  Send(whoIs("Input Server"), (char *)&msg, sizeof(struct IOMessage), (char *)&c, sizeof(int));
   return c;
 }
 
@@ -172,8 +161,7 @@ int Putc(int channel, char ch) {
   msg.channel = channel;
   msg.data = (int)ch;
   int reply;
-  //Send(whoIs("Output Server"), (char *)&msg, sizeof(struct IOMessage), (char *)&reply, sizeof(int));
-  Send(6, (char *)&msg, sizeof(struct IOMessage), (char *)&reply, sizeof(int));
+  Send(whoIs("Output Server"), (char *)&msg, sizeof(struct IOMessage), (char *)&reply, sizeof(int));
   return 0;
 }
 
