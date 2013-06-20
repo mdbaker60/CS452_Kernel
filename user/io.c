@@ -103,9 +103,8 @@ int handleNewOutputTask(int *buffer, int *bufHead, int *bufTail, int *available,
     *UARTData = input;
     return true;
   }else{
-    (*bufHead)++;
+    buffer[(*bufHead)++] = input;
     *bufHead %= BUFFERSIZE;
-    buffer[*bufHead] = input;
     return false;
   }
 }
