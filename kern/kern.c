@@ -419,6 +419,15 @@ void handleInterrupt() {
 	eventStatus[TERMOUT_EVENT] = 0;
       }
     }
+  }else if(*ICU2Status & UART1_MASK){
+    int *UART1_FLAG = (int *)UART1_BASE + UART_FLAG_OFFSET;
+    if (*UART1_FLAG & CTS_MASK){
+      if(waitingTasks[TRAIOUT_EVENT] != NULL) {
+       makeTaskReady(waitingTasks[TRAIOUT_EVENT]);
+       waitingTasks[TRAIOUT_EVENT] = NULL; 
+      }
+    }
+    
   }else if(*ICU2Status & CLK3_MASK) {
     int *clockClear = (int *)(TIMER3_BASE + CLR_OFFSET);
     *clockClear = 0;
