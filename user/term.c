@@ -22,7 +22,22 @@ void parseCommand(char *command) {
   char *arg1 = splitCommand(command);
   char *arg2 = splitCommand(arg1);
 
-  if(strcmp(command, "q") == 0) {
+  if(strcmp(command, "tr") == 0) {
+    if(arg1 == arg2) {
+      printf("\rError: command tr expects 2 arguments\r");
+    }else{
+      int trainNumber = strToInt(arg1);
+      int trainSpeed = strToInt(arg2);
+      if(trainNumber == -1 || trainNumber < 1 || trainNumber > 80) {
+	printf("\rError: train number must be a number between 1 and 80\r");
+      }else if(trainSpeed == -1 || trainSpeed < 0 || trainSpeed > 14) {
+	printf("\rError: train speed must be a number between 0 and 14\r");
+      }else {
+        int trainCommand = (trainSpeed << 8) | trainNumber;
+	sendTrainCommand(trainCommand);
+      }
+    }
+  }else if(strcmp(command, "q") == 0) {
     Shutdown();
   }else{
     printf("\rUnrecognized command: \"%s\"\r", command);

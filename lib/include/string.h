@@ -5,4 +5,6 @@ int strlen(char* str);
 char *strcpy(char *destination, const char *source);
 int strcmp(const char *str1, const char *str2);
 
+int strToInt(char *string);
+
 #endif

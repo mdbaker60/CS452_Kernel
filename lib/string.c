@@ -25,3 +25,21 @@ int strcmp(const char *str1, const char *str2) {
   while(str1[i] != '\0' && str1[i] == str2[i]) i++;
   return str1[i] - str2[i];
 }
+
+
+int strToInt(char *string) {
+  int base = 10;
+  int retVal = 0;
+
+  while(*string != '\0') {
+    int digit = (int)*string - 48;
+    if(digit < 0 || digit > 9) {
+      return -1;
+    }
+    retVal *= base;
+    retVal += digit;
+    string++;
+  }
+
+  return retVal;
+}
