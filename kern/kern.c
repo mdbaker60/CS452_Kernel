@@ -30,10 +30,6 @@ static char *kernOut;
 static int kOutHead;
 static int kOutTail;
 
-void print() {
-  bwprintf(COM2, "FIQ occured\r");
-}
-
 int main() {
   struct Request kactiveRequest;
   struct PriorityQueue kreadyQueue;
@@ -92,14 +88,12 @@ int main() {
 
   *((int *)0x28) = (int)syscall_enter;
   *((int *)0x38) = (int)int_enter;
-  *((int *)0x3C) = (int)fiq_enter;
+  *((int *)0x3C) = (int)int_enter;
   kernMemStart = getSP();
   //leave 250KB of stack space for function calls
   kernMemStart -= 0xFA00;
   setIRQ_SP((int)kernMemStart);
   kernMemStart -= 0x8;		//give IRQ stack 8 words of space
-  setFIQ_SP((int)kernMemStart);
-  kernMemStart -= 0x8;
 
   initQueue(readyQueue);
   userStacks = kernMemStart - MAXTASKS*(0xFA00);

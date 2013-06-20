@@ -6,16 +6,6 @@ getSP:
 	mov	r0, sp
 	mov	pc, lr
 	.size	getSP, .-getSP
-	.align 	2
-	.global	setFIQ_SP
-	.type	setFIQ_SP, %function
-setFIQ_SP:
-	mrs	ip, cpsr
-	bic	ip, ip, #0x1F
-	orr	ip, ip, #0x11
-	msr	cpsr_c, ip
-	b	__move_SP__
-	.size	setFIQ_SP, .-setFIQ_SP
 	.align	2
 	.global	setIRQ_SP
 	.type 	setIRQ_SP, %function
@@ -24,7 +14,6 @@ setIRQ_SP:
 	bic	ip, ip, #0x1F
 	orr	ip, ip, #0x12
 	msr	cpsr_c, ip
-__move_SP__:
 	mov	sp, r0
 	mrs	ip, cpsr
 	bic	ip, ip, #0x1F
@@ -62,26 +51,6 @@ getNextRequest:
 	ldr	ip, [sp, #-4]
 	movs	pc, lr
 	.size	getNextRequest, .-getNextRequest
-	.align	2
-	.global fiq_enter
-	.type	fiq_enter, %function
-fiq_enter:
-	str	r0, [sp, #-4]
-	str	r1, [sp, #-8]
-	mov	r1, lr
-	mrs	ip, cpsr
-	bic	ip, ip, #0x1F
-	orr	ip, ip, #0x12
-	msr	cpsr_c, ip
-	str	ip, [sp, #-4]
-	mov	lr, r1
-	bic	ip, ip, #0x1F
-	orr	ip, ip, #0x11
-	msr	cpsr_c, ip
-	ldr	r0, [sp, #-4]
-	ldr	r1, [sp, #-8]
-	b	__fiq_to_int__
-	.size	fiq_enter, .-fiq_enter
 	.align	2
 	.global	int_enter
 	.type	int_enter, %function
