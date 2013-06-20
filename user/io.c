@@ -58,9 +58,12 @@ void InputInit() {
   int bufHead[2] = {0, 0};
   int bufTail[2] = {0, 0};
 
+  int notifier1Tid = Create(7, notifier);
   int notifier2Tid = Create(7, notifier);
   int eventType = TERMIN_EVENT;
   Send(notifier2Tid, (char *)&eventType, sizeof(int), (char *)&reply, sizeof(int));
+  eventType = TRAIIN_EVENT;
+  Send(notifier1Tid, (char *)&eventType, sizeof(int), (char *)&reply, sizeof(int));
   RegisterAs("Input Server");
 
   while(true) {
@@ -69,12 +72,17 @@ void InputInit() {
       case IONOTIFIER:
 	reply = 0;
 	Reply(src, (char *)&reply, sizeof(int));
-	if(src == notifier2Tid) {
+	if(src == notifier1Tid){
+	  handleNewInput(&first[0], last[0], buffer1, &bufHead[0], bufTail[0], msg.data);
+	}else if(src == notifier2Tid) {
 	  handleNewInput(&first[1], last[1], buffer2, &bufHead[1], bufTail[1], msg.data);
 	}
 	break;
       case IOINPUT:
         nodes[src & 0x7F].tid = src;
+	if (msg.channel == 1){
+	  handleNewInputTask(&first[0], &last[0], buffer1, bufHead[0], &bufTail[0], &nodes[src & 0x7F]);
+	}
 	if(msg.channel == 2) {
 	  handleNewInputTask(&first[1], &last[1], buffer2, bufHead[1], &bufTail[1], &nodes[src & 0x7F]);
 	}
@@ -111,30 +119,47 @@ int handleNewOutputTask(int *buffer, int *bufHead, int *bufTail, int *available,
 
 void OutputInit() {
   struct IOMessage msg;
-  int reply=0, src;
+  int reply=0, src, ctsStatus=1; //assuming CTS defaults to on
   int buffer1[BUFFERSIZE];
   int buffer2[BUFFERSIZE];
   int bufHead[2] = {0, 0};
   int bufTail[2] = {0, 0};
   int available[2] = {false, false};
-
+  
+  int notifier1Tid = Create(7, notifier);
   int notifier2Tid = Create(7, notifier);
+  int notifierCTSTid = Create(7, notifier);
   int eventType = TERMOUT_EVENT;
   Send(notifier2Tid, (char *)&eventType, sizeof(int), (char *)&reply, sizeof(int));
+  eventType = TRAIOUT_EVENT;
+  Send(notifier1Tid, (char*)&eventType, sizeof(int), (char*)&reply, sizeof(int)); 
+  eventType = TRAICTS_EVENT;
+  Send(notifierCTSTid, (char*)&eventType, sizeof(int), (char*)&reply, sizeof(int));
   RegisterAs("Output Server");
 
   while(true) {
     Receive(&src, (char *)&msg, sizeof(struct IOMessage));
     switch(msg.type) {
       case IONOTIFIER:
-	if(src == notifier2Tid) {
+	if (src == notifierCTSTid){
+	  ctsStatus = 1;
+	  if(handleNewOutput(buffer1, &bufHead[0], &bufTail[0], &available[0], UART1_BASE)) {
+	    Reply(notifier1Tid, (char *)&reply, sizeof(int));
+	  } 
+	}else if(src == notifier2Tid) {
 	  if(handleNewOutput(buffer2, &bufHead[1], &bufTail[1], &available[1], UART2_BASE)) {
 	    Reply(notifier2Tid, (char *)&reply, sizeof(int));
 	  } 
 	}
 	break;
+
       case IOOUTPUT:
-	if(msg.channel == 2) {
+	if (msg.channel == 1){
+	 if(handleNewOutputTask(buffer1, &bufHead[0], &bufTail[0], &available[0], UART1_BASE, msg.data)){
+	    ctsStatus = 0;
+	    Reply(notifier1Tid, (char *)&reply, sizeof(int));
+	  } 
+	}else if(msg.channel == 2) {
 	  if(handleNewOutputTask(buffer2, &bufHead[1], &bufTail[1], &available[1], UART2_BASE, msg.data)) {
 	    Reply(notifier2Tid, (char *)&reply, sizeof(int));
 	  }

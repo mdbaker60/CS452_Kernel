@@ -428,6 +428,28 @@ void handleInterrupt() {
 	eventStatus[TERMOUT_EVENT] = 0;
       }
     }
+
+  }else if(*ICU2Status & UART1_MASK){
+    int *UART1_FLAG = (int *)UART1_BASE + UART_FLAG_OFFSET;
+    int *UART1_STATUS = (int *)UART1_BASE + UART_INTR_OFFSET;
+    if (*UART1_FLAG & CTS_MASK){
+      if(waitingTasks[TRAICTS_EVENT] != NULL) {
+       makeTaskReady(waitingTasks[TRAICTS_EVENT]);
+       waitingTasks[TRAICTS_EVENT] = NULL; 
+      }
+    }
+    else if (*UART1_STATUS & RIS_MASK){
+      int *UART1_DATA = (int *)UART1_BASE + UART_DATA_OFFSET; 
+      if (waitingTasks[TRAIIN_EVENT] != NULL){
+        *(waitingTasks[TRAIIN_EVENT] -> SP) = *UART1_DATA; 
+        makeTaskReady(waitingTasks[TRAIIN_EVENT]);
+	waitingTasks[TRAIIN_EVENT] = NULL;
+      }
+      else{
+        eventStatus[TRAIIN_EVENT] = *UART1_DATA;
+      }
+    }
+    
   }else if(*ICU2Status & CLK3_MASK) {
     int *clockClear = (int *)(TIMER3_BASE + CLR_OFFSET);
     *clockClear = 0;
@@ -440,7 +462,6 @@ void handleInterrupt() {
     }
   }
 }
-
 
 void kprint(char *str) {
   while(*str != '\0') {
