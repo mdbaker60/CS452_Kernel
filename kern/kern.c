@@ -50,7 +50,7 @@ int main() {
   //initialize the UARTs
   int *UART1Control = (int *)(UART1_BASE + UART_CTLR_OFFSET);
   int *UART2Control = (int *)(UART2_BASE + UART_CTLR_OFFSET);
-  *UART1Control |= (RIEN_MASK | MSIEN_MASK);
+  *UART1Control |= (RIEN_MASK | RTIEN_MASK | MSIEN_MASK);
   *UART2Control |= RIEN_MASK;
   //turn off the FIFOs, and set UART1's baud rate
   int *UART1LineControlLow = (int *)(UART1_BASE + UART_LCRL_OFFSET);
