@@ -24,7 +24,6 @@ static struct Task **waitingTasks;
 static struct Task *firstFree;
 static struct Task *lastFree;
 static int totalTime;
-static int *eventStatus;
 
 static char *kernOut;
 static int kOutHead;
@@ -35,13 +34,11 @@ int main() {
   struct PriorityQueue kreadyQueue;
   struct Task ktaskArray[MAXTASKS];
   struct Task *kwaitingTasks[NUMEVENTS];
-  int keventStatus[NUMEVENTS];
   char kOut[1000];
   activeRequest = &kactiveRequest; 
   readyQueue = &kreadyQueue;
   taskArray = ktaskArray;
   waitingTasks = kwaitingTasks;
-  eventStatus = keventStatus;
   kernOut = kOut;
   kOutHead = kOutTail = 0;
 
@@ -63,7 +60,7 @@ int main() {
   *UART1LineControlLow = (*UART1LineControlLow & ~BRDL_MASK) | 0xBF;
   *UART1LineControlMid &= ~BRDH_MASK;
   *UART1LineControlHigh = (*UART1LineControlHigh & ~BRK_MASK & ~PEN_MASK & ~FEN_MASK) | WLEN_MASK | STP2_MASK;
-  *UART2LineControlHigh &= ~(FEN_MASK);
+  //*UART2LineControlHigh &= ~(FEN_MASK);
   //turn on interrupts from the clock and UARTs
   int *ICU2Control = (int *)(ICU2_BASE + ENBL_OFFSET);
   *ICU2Control |= (CLK3_MASK | UART2_MASK | UART1_MASK);
@@ -91,7 +88,6 @@ int main() {
   //initialize all wating tasks to NULL
   for(i=0; i<NUMEVENTS; i++) {
     waitingTasks[i] = NULL;
-    eventStatus[i] = -1;
   }
 
   *((int *)0x28) = (int)syscall_enter;
@@ -141,7 +137,7 @@ int main() {
 
   //turn back on the FIFOs
   *UART1LineControlHigh |= FEN_MASK;
-  *UART2LineControlHigh |= FEN_MASK;
+  //*UART2LineControlHigh |= FEN_MASK;
 
   return 0;
 }
@@ -303,14 +299,12 @@ void handle(struct Request *request) {
       active = getNextTask();
       break;
     case AWAITEVENT:
-      if(eventStatus[request->arg1] != -1) {
-	*(active->SP) = eventStatus[request->arg1];
-	eventStatus[request->arg1] = -1;
-	makeTaskReady(active);
-      }else if(waitingTasks[request->arg1] == NULL) {
+      if(waitingTasks[request->arg1] == NULL) {
 	waitingTasks[request->arg1] = active;
 	active->state = EVT_BL;
 	active->event = request->arg1;
+	active->messageBuffer = (char *)request->arg2;
+	active->messageLength = request->arg3;
 	if(request->arg1 == TERMOUT_EVENT) {
 	  int *UART2Control = (int *)(UART2_BASE + UART_CTLR_OFFSET);
 	  *UART2Control |= TIEN_MASK;
@@ -412,16 +406,26 @@ int destroyTask(int Tid) {
 
 void handleInterrupt() {
   int *ICU2Status = (int *)(ICU2_BASE + STAT_OFFSET);
+  volatile int garbage;
   if(*ICU2Status & UART2_MASK) {
     int *UART2Status = (int *)(UART2_BASE + UART_INTR_OFFSET);
-    if(*UART2Status & RIS_MASK) {
+    if((*UART2Status & RIS_MASK) || (*UART2Status & RTIS_MASK)) {
       int *UART2Data = (int *)(UART2_BASE + UART_DATA_OFFSET);
+      int *UART2Flags = (int *)(UART2_BASE + UART_FLAG_OFFSET);
       if(waitingTasks[TERMIN_EVENT] != NULL) {
-        *(waitingTasks[TERMIN_EVENT]->SP) = *UART2Data;
-        makeTaskReady(waitingTasks[TERMIN_EVENT]);
+	struct Task *receiveTask = waitingTasks[TERMIN_EVENT];
+	int i = 0;
+	while(!(*UART2Flags & RXFE_MASK) && i < receiveTask->messageLength) {
+	  (receiveTask->messageBuffer)[i] = *UART2Data;
+	  ++i;
+	}
+        *(receiveTask->SP) = 0;
+        makeTaskReady(receiveTask);
         waitingTasks[TERMIN_EVENT] = NULL;
       }else{
-        eventStatus[TERMIN_EVENT] = *UART2Data;
+	while(!(*UART2Flags & RXFE_MASK)) {
+	  garbage = *UART2Data;
+	}
       }
     }else if(*UART2Status & TIS_MASK) {
       if(kOutHead != kOutTail) {
@@ -434,8 +438,6 @@ void handleInterrupt() {
 	*(waitingTasks[TERMOUT_EVENT]->SP) = 0;
 	makeTaskReady(waitingTasks[TERMOUT_EVENT]);
 	waitingTasks[TERMOUT_EVENT] = NULL;
-      }else{
-	eventStatus[TERMOUT_EVENT] = 0;
       }
     }
   }else if(*ICU2Status & UART1_MASK){
@@ -453,7 +455,7 @@ void handleInterrupt() {
         makeTaskReady(waitingTasks[TRAIIN_EVENT]);
 	waitingTasks[TRAIIN_EVENT] = NULL;
       }else{
-        eventStatus[TRAIIN_EVENT] = *UART1_DATA;
+        garbage = *UART1_DATA;
       }
     }else if(*UART1_STATUS & TIS_MASK) {
       int *UART1Control = (int *)(UART1_BASE + UART_CTLR_OFFSET);
@@ -462,8 +464,6 @@ void handleInterrupt() {
 	*(waitingTasks[TRAIOUT_EVENT]->SP) = 0;
 	makeTaskReady(waitingTasks[TRAIOUT_EVENT]);
 	waitingTasks[TRAIOUT_EVENT] = NULL;
-      }else{
-	eventStatus[TRAIOUT_EVENT] = 0;
       }
     } 
   }else if(*ICU2Status & CLK3_MASK) {
@@ -473,8 +473,6 @@ void handleInterrupt() {
       *(waitingTasks[CLOCK_EVENT]->SP) = 0;
       makeTaskReady(waitingTasks[CLOCK_EVENT]);
       waitingTasks[CLOCK_EVENT] = NULL;
-    }else{
-      eventStatus[CLOCK_EVENT] = 0;
     }
   }
 }

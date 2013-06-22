@@ -77,7 +77,7 @@ Reply:
 AwaitEvent:
 	mov	ip, sp
 	stmfd	sp!, {sp, lr}
-	swi	#0x109
+	swi	#0x309
 	ldmfd	sp, {sp, pc}
 	.size	AwaitEvent, .-AwaitEvent
 	.align	2
