@@ -13,7 +13,12 @@ struct IONode {
   int data;
   struct IONode *next;
 };
+struct IOmessagebuf{
+  int type;
+  char data[64];
+  int channel;
 
+};
 struct IOMessage {
   int type;
   int data;
@@ -48,7 +53,7 @@ void handleNewInputTask(struct IONode **first, struct IONode **last, int *buffer
 }
 
 void InputInit() {
-  struct IOMessage msg;
+  struct IOmessagebuf msg;
   int reply, src;
   struct IONode nodes[100];
   struct IONode *first[2] = {NULL, NULL};
