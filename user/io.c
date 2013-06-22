@@ -58,8 +58,8 @@ void InputInit() {
   int bufHead[2] = {0, 0};
   int bufTail[2] = {0, 0};
 
-  int notifier1Tid = Create(7, notifier);
-  int notifier2Tid = Create(7, notifier);
+  int notifier1Tid = Create(7, bufferedNotifier);
+  int notifier2Tid = Create(7, bufferedNotifier);
   int eventType = TERMIN_EVENT;
   Send(notifier2Tid, (char *)&eventType, sizeof(int), (char *)&reply, sizeof(int));
   eventType = TRAIIN_EVENT;
