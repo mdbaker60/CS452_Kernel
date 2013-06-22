@@ -36,7 +36,7 @@ void reverser() {
   Receive(&src, (char *)&info, sizeof(struct trainInfo));
   Reply(src, (char *)&reply, sizeof(int));
 
-  Delay(150);
+  Delay(250);
   //reverse command
   int trainCommand = (15 << 8) | info.number;
   sendTrainCommand(trainCommand);
@@ -79,6 +79,14 @@ void sensorDriver() {
   }
   int bufHead = 0;
 
+  //throw out initial sensor poll
+  //to avoid garbage sensor information
+  //on initial run
+  Putc(1, (char)133);
+  for(i=0; i<10; i++) {
+    Getc(1);
+  }
+
   int sensorData, listUpdated;
   while(true) {
     listUpdated = false;
@@ -100,14 +108,14 @@ void parseCommand(char *command, int *trainSpeeds) {
 
   if(strcmp(command, "tr") == 0) {
     if(arg1 == arg2) {
-      printf("\rError: command tr expects 2 arguments");
+      printColored(RED, BLACK, "\rError: command tr expects 2 arguments");
     }else{
       int trainNumber = strToInt(arg1);
       int trainSpeed = strToInt(arg2);
       if(trainNumber == -1 || trainNumber < 1 || trainNumber > 80) {
-	printf("\rError: train number must be a number between 1 and 80");
+	printColored(RED, BLACK, "\rError: train number must be a number between 1 and 80");
       }else if(trainSpeed == -1 || trainSpeed < 0 || trainSpeed > 14) {
-	printf("\rError: train speed must be a number between 0 and 14");
+	printColored(RED, BLACK, "\rError: train speed must be a number between 0 and 14");
       }else {
         int trainCommand = (trainSpeed << 8) | trainNumber;
 	sendTrainCommand(trainCommand);
@@ -116,11 +124,11 @@ void parseCommand(char *command, int *trainSpeeds) {
     }
   }else if(strcmp(command, "rv") == 0) {
     if(arg1 == command) {
-      printf("\rError: command rv expects an argument");
+      printColored(RED, BLACK, "\rError: command rv expects an argument");
     }else{
       int trainNumber = strToInt(arg1);
       if(trainNumber == -1 || trainNumber < 1 || trainNumber > 80) {
-	printf("\rError: train number must be a number between 1 and 80");
+	printColored(RED, BLACK, "\rError: train number must be a number between 1 and 80");
       }else{
 	sendTrainCommand(trainNumber);
 	int reverseTask = Create(1, reverser);
@@ -133,23 +141,32 @@ void parseCommand(char *command, int *trainSpeeds) {
     }
   }else if(strcmp(command, "sw") == 0) {
     if(arg1 == arg2) {
-      printf("\rError: command sw expects two arguments");
+      printColored(RED, BLACK, "\rError: command sw expects two arguments");
     }else{
       int switchNumber = strToInt(arg1);
-      char switchDirection = arg2[0];
-      if(switchDirection != 'S' && switchDirection != 'C') {
-	printf("\rError: switch direction must be 'S' or 'C'");
+      char switchDirection;
+      if(arg2[1] == '\0') {
+        switchDirection = arg2[0];
       }else{
+	switchDirection = '!';
+      }
+      if(switchDirection != 'S' && switchDirection != 'C') {
+	printColored(RED, BLACK, "\rError: switch direction must be 'S' or 'C'");
+      }else if(switchDirection == 'S') {
 	Putc(1, (char)33);
 	Putc(1, (char)switchNumber);
 	Putc(1, (char)32);
 	updateSwitchTable(switchNumber, switchDirection);
+      }else if(switchDirection == 'C') {
+	Putc(1, (char)34);
+	Putc(1, (char)switchNumber);
+	Putc(1, (char)32);
       }
     }
   }else if(strcmp(command, "q") == 0) {
     Shutdown();
   }else{
-    printf("\rUnrecognized command: \"%s\"", command);
+    printColored(RED, BLACK, "\rUnrecognized command: \"%s\"", command);
   }
   printf("\r>");
 }
@@ -157,10 +174,10 @@ void parseCommand(char *command, int *trainSpeeds) {
 void terminalDriver() {
   char commands[NUM_SAVED_COMMANDS][BUFFERSIZE];
   int lengths[NUM_SAVED_COMMANDS];
-  int commandNum = 0;
+  int commandNum = 0, viewingNum = 0;
 
-  char *curCommand = commands[0];
-  int commandLength = 0;
+  char curCommand[BUFFERSIZE];
+  int commandLength = 0, totalCommands = 0;
 
   char c;
 
@@ -182,12 +199,15 @@ void terminalDriver() {
     switch(c) {
       case '\r':
 	curCommand[commandLength] = '\0';
-	parseCommand(curCommand, trainSpeeds);
+	strcpy(commands[commandNum], curCommand);
 	lengths[commandNum] = commandLength;
+	parseCommand(curCommand, trainSpeeds);
 	commandNum++;
 	commandNum %= NUM_SAVED_COMMANDS;
-	curCommand = commands[commandNum];
+	viewingNum = commandNum;
+	commands[commandNum][0] = '\0';
 	commandLength = 0;
+	if(totalCommands < NUM_SAVED_COMMANDS-1) totalCommands++;
 	break;
       case '\x8':
 	if(commandLength > 0) {
@@ -199,19 +219,29 @@ void terminalDriver() {
 	c = (char)Getc(2);
 	c = (char)Getc(2);
 	if(c == 'A') {
-	  lengths[commandNum] = commandLength;
-	  commandNum += NUM_SAVED_COMMANDS - 1;
-	  commandNum %= NUM_SAVED_COMMANDS;
-	  curCommand = commands[commandNum];
-	  commandLength = lengths[commandNum];
-	  outputEscape("[100D[K");
-	  printf(">%s", curCommand);
+	  if(commandNum == viewingNum) {
+	    curCommand[commandLength] = '\0';
+	    strcpy(commands[commandNum], curCommand);
+	    lengths[commandNum] = commandLength;
+	  }
+	  if(viewingNum != ((commandNum + NUM_SAVED_COMMANDS - totalCommands) 
+					% NUM_SAVED_COMMANDS)) {
+	    viewingNum += NUM_SAVED_COMMANDS - 1;
+	    viewingNum %= NUM_SAVED_COMMANDS;
+	    strcpy(curCommand, commands[viewingNum]);
+	    commandLength = lengths[viewingNum];
+	    outputEscape("[100D[K");
+	    printf(">%s", curCommand);
+	  }
 	}else if(c == 'B') {
-	  printf("down");
-	}else if(c == 'C') {
-	  printf("right");
-	}else if(c == 'D') {
-	  printf("left");
+	  if(viewingNum != commandNum) {
+	    viewingNum += 1;
+	    viewingNum %= NUM_SAVED_COMMANDS;
+	    strcpy(curCommand, commands[viewingNum]);
+	    commandLength = lengths[viewingNum];
+	    outputEscape("[100D[K");
+	    printf(">%s", curCommand);
+	  }
 	}
 	break;
       default:

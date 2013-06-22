@@ -5,7 +5,19 @@
 //	memcpy(dest, src, len+1);
 //}
 char *strcpy(char *destination, const char *source) {
-  return memcpy(destination, source, strlen((char *)source)+1);
+  int length = strlen((char *)source)+1;
+
+  if(length >= 4) {
+    return memcpy(destination, source, strlen((char *)source)+1);
+  }
+
+  int i=0;
+  while(source[i] != '\0') {
+    destination[i] = source[i];
+    i++;
+  }
+  destination[i] = '\0';
+  return destination;
 }
 
 int strlen(char* str){

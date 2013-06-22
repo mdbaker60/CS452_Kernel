@@ -8,6 +8,15 @@
 #define DRAWSTART	0
 #define DRAWSTOP	1
 
+#define BLACK	0
+#define RED	1
+#define GREEN	2
+#define YELLOW	3
+#define BLUE	4
+#define MAGENTA	5
+#define CYAN	6
+#define WHITE	7
+
 typedef char *va_list;
 
 #define __va_argsiz(t)	\
@@ -34,6 +43,7 @@ void printf(char *format, ...);
 void outputEscape(char *escape);
 void moveCursor(int line, int column);
 void printAt(int line, int column, char *format, ...);
+void printColored(int fColor, int bColor, char *format, ...);
 void sendTrainCommand(int command);
 
 void DSInit();

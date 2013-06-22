@@ -14,9 +14,10 @@ void bufferedNotifier(){
   msg.type = 0;
   Receive(&server, (char *)&eventType, sizeof(int));
   Reply(server, (char *)&reply, sizeof(int));
+
   while(true){
-    err = AwaitEvent(eventType, (char *)&(msg.data), sizeof(char)*64);
-    Send(server, (char *)&msg, sizeof(struct NotifierMessage), (char *)&reply, sizeof(int));	  
+    err = AwaitEvent(eventType, msg.data, 17);
+    Send(server, (char *)&msg, sizeof(struct NotifierMessageBuf), (char *)&reply, sizeof(int));
   }
 }
 void notifier() {
@@ -26,7 +27,7 @@ void notifier() {
   Receive(&server, (char *)&eventType, sizeof(int));
   Reply(server, (char *)&reply, sizeof(int));
   while(true) {
-    msg.data = AwaitEvent(eventType, (char *)&msg, sizeof(char)*16);
+    msg.data = AwaitEvent(eventType, NULL, 0);
     Send(server, (char *)&msg, sizeof(struct NotifierMessage), (char *)&reply, sizeof(int));
   }
 }

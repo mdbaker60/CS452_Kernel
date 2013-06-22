@@ -8,7 +8,7 @@ struct NotifierMessage {
 
 struct NotifierMessageBuf {
   int type;
-  char data[64];
+  int data[17];
 };
 void idleTask();
 void notifier();

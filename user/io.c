@@ -13,12 +13,12 @@ struct IONode {
   int data;
   struct IONode *next;
 };
-struct IOmessagebuf{
-  int type;
-  char data[64];
-  int channel;
 
+struct IOMessagebuf{
+  int type;
+  int data[17];
 };
+
 struct IOMessage {
   int type;
   int data;
@@ -39,7 +39,7 @@ void handleNewInput(struct IONode **first, struct IONode *last, int *buffer,
 void handleNewInputTask(struct IONode **first, struct IONode **last, int *buffer, 
 	int bufHead, int *bufTail, struct IONode *myNode) {
   if(bufHead != *bufTail) {
-    Reply(myNode->tid, (char *)buffer[(*bufTail)++], sizeof(int));
+    Reply(myNode->tid, (char *)&buffer[(*bufTail)++], sizeof(int));
     *bufTail %= BUFFERSIZE;
   }else{
     if(*first == NULL) {
@@ -53,7 +53,8 @@ void handleNewInputTask(struct IONode **first, struct IONode **last, int *buffer
 }
 
 void InputInit() {
-  struct IOmessagebuf msg;
+  struct IOMessagebuf bufMsg;
+  struct IOMessage *msg = (struct IOMessage *)&bufMsg;
   int reply, src;
   struct IONode nodes[100];
   struct IONode *first[2] = {NULL, NULL};
@@ -63,7 +64,7 @@ void InputInit() {
   int bufHead[2] = {0, 0};
   int bufTail[2] = {0, 0};
 
-  int notifier1Tid = Create(7, bufferedNotifier);
+  int notifier1Tid = Create(7, notifier);
   int notifier2Tid = Create(7, bufferedNotifier);
   int eventType = TERMIN_EVENT;
   Send(notifier2Tid, (char *)&eventType, sizeof(int), (char *)&reply, sizeof(int));
@@ -72,22 +73,26 @@ void InputInit() {
   RegisterAs("Input Server");
 
   while(true) {
-    Receive(&src, (char *)&msg, sizeof(struct IOMessage));
-    switch(msg.type) {
+    Receive(&src, (char *)&bufMsg, sizeof(struct IOMessagebuf));
+    switch(bufMsg.type) {
       case IONOTIFIER:
 	reply = 0;
 	Reply(src, (char *)&reply, sizeof(int));
 	if(src == notifier1Tid){
-	  handleNewInput(&first[0], last[0], buffer1, &bufHead[0], bufTail[0], msg.data);
+	  handleNewInput(&first[0], last[0], buffer1, &bufHead[0], bufTail[0], (char)msg->data);
 	}else if(src == notifier2Tid) {
-	  handleNewInput(&first[1], last[1], buffer2, &bufHead[1], bufTail[1], msg.data);
+	  int *buffer = bufMsg.data;
+	  while(*buffer != (int)'\0') {
+	    handleNewInput(&first[1], last[1], buffer2, &bufHead[1], bufTail[1], *buffer);
+	    buffer++;
+	  }
 	}
 	break;
       case IOINPUT:
         nodes[src & 0x7F].tid = src;
-	if (msg.channel == 1){
+	if (msg->channel == 1){
 	  handleNewInputTask(&first[0], &last[0], buffer1, bufHead[0], &bufTail[0], &nodes[src & 0x7F]);
-	}else if(msg.channel == 2) {
+	}else if(msg->channel == 2) {
 	  handleNewInputTask(&first[1], &last[1], buffer2, bufHead[1], &bufTail[1], &nodes[src & 0x7F]);
 	}
 	break;
@@ -300,7 +305,24 @@ void printAt(int line, int column, char *format, ...) {
 
   outputEscape("[u");
   finishedDrawing();
-  //moveCursor(savedLine, savedColumn);
+}
+
+void printColored(int fColor, int bColor, char *format, ...) {
+  va_list va;
+
+  requestDraw();
+  outputEscape("[");
+  printInt(2, fColor+30, 10);
+  Putc(2, ';');
+  printInt(2, bColor+40, 10);
+  Putc(2, 'm');
+
+  va_start(va, format);
+  formatString(format, va);
+  va_end(va);
+
+  outputEscape("[37;40m");
+  finishedDrawing();
 }
 
 void sendTrainCommand(int command) {

@@ -50,8 +50,8 @@ int main() {
   //initialize the UARTs
   int *UART1Control = (int *)(UART1_BASE + UART_CTLR_OFFSET);
   int *UART2Control = (int *)(UART2_BASE + UART_CTLR_OFFSET);
-  *UART1Control |= (RIEN_MASK | RTIEN_MASK | MSIEN_MASK);
-  *UART2Control |= RIEN_MASK;
+  *UART1Control |= (RIEN_MASK | MSIEN_MASK);
+  *UART2Control |= (RIEN_MASK | RTIEN_MASK);
   //turn off the FIFOs, and set UART1's baud rate
   int *UART1LineControlLow = (int *)(UART1_BASE + UART_LCRL_OFFSET);
   int *UART1LineControlMid = (int *)(UART1_BASE + UART_LCRM_OFFSET);
@@ -414,11 +414,13 @@ void handleInterrupt() {
       int *UART2Flags = (int *)(UART2_BASE + UART_FLAG_OFFSET);
       if(waitingTasks[TERMIN_EVENT] != NULL) {
 	struct Task *receiveTask = waitingTasks[TERMIN_EVENT];
+	int *buffer = (int *)receiveTask->messageBuffer;
 	int i = 0;
-	while(!(*UART2Flags & RXFE_MASK) && i < receiveTask->messageLength) {
-	  (receiveTask->messageBuffer)[i] = *UART2Data;
+	while((!(*UART2Flags & RXFE_MASK)) && (i < receiveTask->messageLength-1)) {
+	  buffer[i] = (char)*UART2Data;
 	  ++i;
 	}
+	buffer[i] = '\0';
         *(receiveTask->SP) = 0;
         makeTaskReady(receiveTask);
         waitingTasks[TERMIN_EVENT] = NULL;
