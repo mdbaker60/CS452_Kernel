@@ -5,6 +5,9 @@
 #define IOINPUT		1
 #define IOOUTPUT	2
 
+#define DRAWSTART	0
+#define DRAWSTOP	1
+
 typedef char *va_list;
 
 #define __va_argsiz(t)	\
@@ -29,6 +32,12 @@ void printInt(int channel, int n, int base);
 void formatString(char *format, va_list va);
 void printf(char *format, ...);
 void outputEscape(char *escape);
+void moveCursor(int line, int column);
+void printAt(int line, int column, char *format, ...);
 void sendTrainCommand(int command);
+
+void DSInit();
+int requestDraw();
+int finishedDrawing();
 
 #endif

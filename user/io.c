@@ -163,7 +163,6 @@ void OutputInit() {
 	  } 
 	}
 	break;
-
       case IOOUTPUT:
 	if (msg.channel == 1){
 	  if(handleNewOutputTask(buffer1, &bufHead[0], &bufTail[0], &available[0], UART1_BASE, ctsState, msg.data)){
@@ -275,10 +274,101 @@ void outputEscape(char *escape) {
   }
 }
 
+void moveCursor(int line, int column) {
+  outputEscape("[");
+  printInt(2, line, 10);
+  Putc(2, ';');
+  printInt(2, column, 10);
+  Putc(2, 'f');
+}
+
+void printAt(int line, int column, char *format, ...) {
+  va_list va;
+
+  requestDraw();
+  outputEscape("[s");
+  moveCursor(line, column);
+
+  va_start(va, format);
+  formatString(format, va);
+  va_end(va);
+
+  outputEscape("[u");
+  finishedDrawing();
+  //moveCursor(savedLine, savedColumn);
+}
+
 void sendTrainCommand(int command) {
   char second = command & 0xFF;
   char first = command >> 8;
 
   Putc(1, first);
   Putc(1, second);
+}
+
+/***********************************************************************************************/
+
+struct DrawNode {
+  int src;
+  struct DrawNode *next;
+};
+
+void waitForStopMessage(struct DrawNode **first, struct DrawNode **last, struct DrawNode *nodes) {
+  int src, reply, messageType;
+  do{
+    Receive(&src, (char *)&messageType, sizeof(int));
+    if(messageType == DRAWSTOP) {
+      reply = 0;
+      Reply(src, (char *)&reply, sizeof(int));
+    }else{
+      struct DrawNode *myNode = &nodes[src & 0x7F];
+      myNode->src = src;
+      myNode->next = NULL;
+      if(*first == NULL) {
+        *first = *last = myNode;
+      }else{
+	(*last)->next = myNode;
+	*last = myNode;
+      }
+    }
+  }while(messageType != DRAWSTOP);
+}
+
+void DSInit() {
+  struct DrawNode nodes[100];
+  struct DrawNode *first = NULL;
+  struct DrawNode *last = NULL;
+
+  int src, reply, messageType;
+
+  RegisterAs("Draw Server");
+
+  while(true) {
+    if(first == NULL) {
+      Receive(&src, (char *)&messageType, sizeof(int));
+      if(messageType == DRAWSTART) {
+        reply = 0;
+	Reply(src, (char *)&reply, sizeof(int));
+	waitForStopMessage(&first, &last, nodes);
+      }
+    }else{	//first != NULL
+      src = first->src;
+      first = first->next;
+      reply =0;
+      Reply(src, (char *)&reply, sizeof(int));
+      waitForStopMessage(&first, &last, nodes);
+    }
+  }
+}
+
+int requestDraw() {
+  int messageType = DRAWSTART, reply;
+  Send(whoIs("Draw Server"), (char *)&messageType, sizeof(int), (char *)&reply, sizeof(int));
+  return 0;
+}
+
+int finishedDrawing() {
+  int messageType = DRAWSTOP, reply;
+  Send(whoIs("Draw Server"), (char *)&messageType, sizeof(int), (char *)&reply, sizeof(int));
+  return 0;
 }
