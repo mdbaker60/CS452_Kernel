@@ -12,6 +12,7 @@ data 0x00218000: /* Initialized data. */
 {
 _DataStart = . ;
 *(.data)
+*(.data.rel.ro.local)
 _DataEnd = . ;
 } >ram
 

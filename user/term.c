@@ -10,6 +10,47 @@ void updateSwitchTable(int switchNum, char state);
 void initSwitchTable();
 int saveSensor(char *buffer, int *head, int data, int byteNumber, int *states);
 void printSensorList(char *buffer, int head);
+char *splitCommand(char *command);
+
+int largestPrefix(char *str1, char *str2) {
+  int i=0;
+  while(str1[i] != '\0' && str1[i] == str2[i]) i++;
+  return i;
+}
+
+int tabComplete(char *command) {
+  char *commands[5] = {"q", "tr", "rv", "sw", "setTrack"};
+
+  int length = strlen(command);
+  char *arg1 = splitCommand(command);
+  if(arg1 != command) {
+    *(arg1-1) = ' ';
+    return length;
+  }
+
+  int maxMatched = -1;
+  char *matchedIn;
+  int i;
+  for(i=0; i<5; i++) {
+    int prefix = largestPrefix(command, commands[i]);
+    if(maxMatched == -1 && prefix >= length) {
+      maxMatched = strlen(commands[i]);
+      matchedIn = commands[i];
+    }else if(prefix >= length) {
+      maxMatched = largestPrefix(matchedIn, commands[i]);
+    }
+  }
+
+  if(maxMatched == -1) {
+    return length;
+  }
+  for(i=0; i<maxMatched; i++) {
+    command[i] = matchedIn[i];
+  }
+  command[maxMatched] = '\0';
+
+  return maxMatched;
+}
 
 char *splitCommand(char *command) {
   int i=0;
@@ -208,6 +249,14 @@ void terminalDriver() {
 	commands[commandNum][0] = '\0';
 	commandLength = 0;
 	if(totalCommands < NUM_SAVED_COMMANDS-1) totalCommands++;
+	break;
+      case '\t':
+	if(commandLength > 0) {
+	  curCommand[commandLength] = '\0';
+	  commandLength = tabComplete(curCommand);
+	  outputEscape("[100D[K");
+	  printf(">%s", curCommand);
+	}
 	break;
       case '\x8':
 	if(commandLength > 0) {
