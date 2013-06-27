@@ -5,11 +5,18 @@
 #include <io.h>
 #include <values.h>
 #include <clockServer.h>
+#include <train.h>
+#include <track.h>
 
-void updateSwitchTable(int switchNum, char state);
-void initSwitchTable();
-int saveSensor(char *buffer, int *head, int data, int byteNumber, int *states);
-void printSensorList(char *buffer, int head);
+#define NUMCOMMANDS 6
+
+void trainTracker();
+void trainController();
+struct TrainMessage {
+  int trainNum;
+  char dest[8];
+};
+
 char *splitCommand(char *command);
 
 int largestPrefix(char *str1, char *str2) {
@@ -19,7 +26,7 @@ int largestPrefix(char *str1, char *str2) {
 }
 
 int tabComplete(char *command) {
-  char *commands[5] = {"q", "tr", "rv", "sw", "setTrack"};
+  char *commands[NUMCOMMANDS] = {"q", "tr", "rv", "sw", "setTrack", "move"};
 
   int length = strlen(command);
   char *arg1 = splitCommand(command);
@@ -31,7 +38,7 @@ int tabComplete(char *command) {
   int maxMatched = -1;
   char *matchedIn;
   int i;
-  for(i=0; i<5; i++) {
+  for(i=0; i<NUMCOMMANDS; i++) {
     int prefix = largestPrefix(command, commands[i]);
     if(maxMatched == -1 && prefix >= length) {
       maxMatched = strlen(commands[i]);
@@ -79,11 +86,9 @@ void reverser() {
 
   Delay(250);
   //reverse command
-  int trainCommand = (15 << 8) | info.number;
-  sendTrainCommand(trainCommand);
+  Putc2(1, (char)15, (char)info.number);
   //back to speed command
-  trainCommand = (info.speed << 8) | info.number;
-  sendTrainCommand(trainCommand);
+  Putc2(1, (char)info.speed, (char)info.number);
 
   Destroy(MyTid());
 }
@@ -103,43 +108,7 @@ void clockDriver() {
 	mins++;
       }
     }
-    printAt(1, 1, "%d%d:%d%d:%d", mins/10, mins%10, secs/10, secs%10, tenthSecs);
-  }
-}
-
-void sensorDriver() {
-  int i;
-  int sensorStates[80];
-  for(i=0; i<80; i++) {
-    sensorStates[i] = false;
-  }
-
-  char sensorBuffer[30];
-  for(i=0; i<30; i++) {
-    sensorBuffer[i] = ' ';
-  }
-  int bufHead = 0;
-
-  //throw out initial sensor poll
-  //to avoid garbage sensor information
-  //on initial run
-  Putc(1, (char)133);
-  for(i=0; i<10; i++) {
-    Getc(1);
-  }
-
-  int sensorData, listUpdated;
-  while(true) {
-    listUpdated = false;
-    Putc(1, (char)133);
-    for(i=0; i<10; i++) {
-      sensorData = Getc(1);
-      listUpdated |= saveSensor(sensorBuffer, &bufHead, sensorData, i, sensorStates);
-    }
-    if(listUpdated) {
-      printSensorList(sensorBuffer, bufHead);
-    }
-    Delay(10);
+    printTime(mins, secs, tenthSecs);
   }
 }
 
@@ -158,8 +127,7 @@ void parseCommand(char *command, int *trainSpeeds) {
       }else if(trainSpeed == -1 || trainSpeed < 0 || trainSpeed > 14) {
 	printColored(RED, BLACK, "\rError: train speed must be a number between 0 and 14");
       }else {
-        int trainCommand = (trainSpeed << 8) | trainNumber;
-	sendTrainCommand(trainCommand);
+	Putc2(1, (char)trainSpeed, (char)trainNumber);
 	trainSpeeds[trainNumber] = trainSpeed;
       }
     }
@@ -171,7 +139,7 @@ void parseCommand(char *command, int *trainSpeeds) {
       if(trainNumber == -1 || trainNumber < 1 || trainNumber > 80) {
 	printColored(RED, BLACK, "\rError: train number must be a number between 1 and 80");
       }else{
-	sendTrainCommand(trainNumber);
+	Putc2(1, (char)0, (char)trainNumber);
 	int reverseTask = Create(1, reverser);
         int reply;
 	struct trainInfo info;
@@ -194,22 +162,223 @@ void parseCommand(char *command, int *trainSpeeds) {
       if(switchDirection != 'S' && switchDirection != 'C') {
 	printColored(RED, BLACK, "\rError: switch direction must be 'S' or 'C'");
       }else if(switchDirection == 'S') {
-	Putc(1, (char)33);
-	Putc(1, (char)switchNumber);
+	Putc2(1, (char)33, (char)switchNumber);
 	Putc(1, (char)32);
-	updateSwitchTable(switchNumber, switchDirection);
+	setSwitchState(switchNumber, switchDirection);
       }else if(switchDirection == 'C') {
-	Putc(1, (char)34);
-	Putc(1, (char)switchNumber);
+	Putc2(1, (char)34, (char)switchNumber);
 	Putc(1, (char)32);
+	setSwitchState(switchNumber, switchDirection);
       }
     }
   }else if(strcmp(command, "q") == 0) {
     Shutdown();
+  }else if(strcmp(command, "setTrack") == 0) {
+    if(arg1 == command) {
+      printColored(RED, BLACK, "\rError: command setTrack expects an argument\r");
+    }else{
+      if(arg1[1] == '\0') {
+	if(arg1[0] == 'A') {
+	  setTrack(TRACKA);
+	}else if(arg1[0] == 'B') {
+	  setTrack(TRACKB);
+	}else {
+	  printColored(RED, BLACK, "\rError: track must be A or B\r");
+	}
+      }else{
+	printColored(RED, BLACK, "\rError: track must be A or B\r");
+      }
+    }
+  }else if(strcmp(command, "move") == 0) {
+    if(arg1 == arg2) {
+      printColored(RED, BLACK, "\rError: command move expects two arguments\r");
+    }else{
+      struct TrainMessage msg;
+      msg.trainNum = strToInt(arg1);
+      strcpy(msg.dest, arg2);
+      int reply, tid = Create(2, trainController);
+      Send(tid, (char *)&msg, sizeof(struct TrainMessage), (char *)&reply, sizeof(int));
+    }
   }else{
     printColored(RED, BLACK, "\rUnrecognized command: \"%s\"", command);
   }
   printf("\r>");
+}
+
+void copyPath(struct Path *dest, struct Path *source) {
+  int i=0;
+  dest->numEdges = source->numEdges;
+  for(i=0; i < source->numEdges; i++) {
+    (dest->edge)[i] = (source->edge)[i];
+  }
+}
+
+int BFS(int node1, int node2, track_node *track, struct Path *path) {
+  track_node *start = &track[node1];
+  track_node *stop = &track[node2];
+
+  track_node *first = start;
+  track_node *last = start;
+
+  int i;
+  for(i=0; i<TRACK_MAX; i++) {
+    track[i].discovered = false;
+    track[i].next = NULL;
+  }
+  first->discovered = true;
+  first->searchDistance = 0;
+  (first->path).numEdges = 0;
+
+  while(first != NULL) {
+    if(first == stop) {
+      if(path != NULL) {
+	copyPath(path, &(first->path));
+      }
+      return first->searchDistance;
+    }
+    if(first->type == NODE_SENSOR || first->type == NODE_MERGE || first->type == NODE_ENTER || first->type == NODE_EXIT) {
+      if(((first->edge)[0].dest)->discovered == false) {
+	last->next = (first->edge)[0].dest;
+	last = last->next;
+	last->discovered = true;
+	last->next = NULL;
+	last->searchDistance = first->searchDistance + (first->edge)[0].dist;
+	copyPath(&(last->path), &(first->path));
+	(last->path).edge[(last->path).numEdges++] = &((first->edge)[0]);
+      }
+    }else if(first->type == NODE_BRANCH) {
+      for(i=0; i<2; i++) {
+	if(((first->edge)[i].dest)->discovered == false) {
+	  last->next = (first->edge)[i].dest;
+	  last = last->next;
+	  last->discovered = true;
+	  last->next = NULL;
+	  last->searchDistance = first->searchDistance + (first->edge)[i].dist;
+	  copyPath(&(last->path), &(first->path));
+	  (last->path).edge[(last->path).numEdges++] = &(first->edge)[i];
+	}
+      }
+    }
+    first = first->next;
+  }
+
+  return 0;
+}
+
+void trainController() {
+  int v = 225;
+  track_node track[TRACK_MAX];
+  initTrack(track);
+
+  int src, reply = 0;
+  struct TrainMessage msg;
+  Receive(&src, (char *)&msg, sizeof(struct TrainMessage));
+  Reply(src, (char *)&reply, sizeof(int));
+
+  int dest = 0, trainNum = msg.trainNum;
+  while(dest < TRACK_MAX && strcmp(track[dest].name, msg.dest) != 0) dest++;
+
+  struct Path path;
+  Putc2(1, (char)2, (char)trainNum);
+  int source = waitOnAnySensor();
+  Putc2(1, (char)0, (char)trainNum);
+  Putc2(1, (char)10, (char)trainNum);
+
+  BFS(source, dest, track, &path);
+  /*int i;
+  for(i=0; i<path.numEdges; i++) {
+    printf("%s ->", ((path.edge[i])->src)->name);
+  }
+  printf("%s\r", ((path.edge[i-1])->dest)->name);*/
+
+  int curEdge = 0;
+  node_type nodeType;
+  while(true) {
+    nodeType = ((path.edge[curEdge])->dest)->type;
+    if(nodeType == NODE_SENSOR) {
+      int sensorNum = ((path.edge[curEdge])->dest)->num;
+      printf("waiting to hit sensor %s\r", ((path.edge[curEdge])->dest)->name);
+      if(path.numEdges > curEdge+1 && ((path.edge[curEdge+1])->dest)->type == NODE_BRANCH) {
+	curEdge++;
+	if(&(((path.edge[curEdge])->dest)->edge)[DIR_STRAIGHT] == path.edge[curEdge+1]) {
+	  Putc2(1, (char)33, (char)((path.edge[curEdge])->dest)->num);
+	  Putc(1, (char)32);
+	}else{
+	  Putc2(1, (char)34, (char)((path.edge[curEdge])->dest)->num);
+	  Putc(1, (char)32);
+	}
+	waitOnSensor(((path.edge[curEdge-1])->dest)->num);
+      }else{
+        waitOnSensor(((path.edge[curEdge])->dest)->num);
+      }
+    }else if(nodeType == NODE_BRANCH) {
+      if(&((((path.edge[curEdge])->dest)->edge)[DIR_STRAIGHT]) == path.edge[curEdge+1]) {
+	Putc2(1, (char)33, (char)((path.edge[curEdge])->dest)->num);
+	Putc(1, (char)32);
+      }else{
+	Putc2(1, (char)34, (char)((path.edge[curEdge])->dest)->num);
+	Putc(1, (char)32);
+      }
+    }
+
+    if((path.edge[curEdge])->dest == &track[dest]) {
+      break;
+    }
+    curEdge++;
+  }
+  
+
+  Putc2(1, (char)0, (char)trainNum);
+  printf("reached destination\r");
+  Destroy(MyTid());
+
+  int seconds, time, oldTime = Time(), distance, sensor, oldSensor = waitOnAnySensor();
+  while(true) {
+    sensor = waitOnAnySensor();
+    time = Time();
+    distance = BFS(oldSensor, sensor, track, NULL);
+    seconds = (time - oldTime);
+    v *= 90;
+    v += (500*distance)/seconds;
+    v /= 100;
+    oldTime = time;
+    oldSensor = sensor;
+  }
+}
+
+void trainTracker() {
+  int v = 425;
+  track_node track[TRACK_MAX];
+  initTrack(track);
+
+  int src, trainNum, reply = 0;
+  Receive(&src, (char *)&trainNum, sizeof(int));
+  Reply(src, (char *)&reply, sizeof(int));
+
+  char debugMessage[19];
+  strcpy(debugMessage, "Velocity: 000 mm/s");
+
+  int seconds, time, oldTime = Time(), distance, sensor, oldSensor = waitOnAnySensor();
+  while(true) {
+    sensor = waitOnAnySensor();
+    time = Time();
+    distance = BFS(oldSensor, sensor, track, NULL);
+    seconds = (time - oldTime);
+    v *= 90;
+    v += (500*distance)/seconds;
+    v /= 100;
+    debugMessage[10] = (char)((v/100)%10)+48;
+    debugMessage[11] = (char)((v/10)%10)+48;
+    debugMessage[12] = (char)(v%10)+48;
+    printDebugInfo(1, debugMessage);
+
+    if(sensor == 71) {
+      Putc2(1, (char)0, (char)trainNum);
+    }
+
+    oldTime = time;
+    oldSensor = sensor;
+  }
 }
 
 void terminalDriver() {
@@ -228,13 +397,12 @@ void terminalDriver() {
     trainSpeeds[i] = 0;
   }
 
-  Create(2, clockDriver);
-  Create(2, sensorDriver);
+  Create(1, clockDriver);
 
   outputEscape("[2J");
-  initSwitchTable();
-  moveCursor(8, 1);
+  moveCursor(13, 1);
   Putc(2, '>');
+  refreshScreen();
   while(true) {
     c = (char)Getc(2);
     switch(c) {
@@ -249,6 +417,7 @@ void terminalDriver() {
 	commands[commandNum][0] = '\0';
 	commandLength = 0;
 	if(totalCommands < NUM_SAVED_COMMANDS-1) totalCommands++;
+	refreshScreen();
 	break;
       case '\t':
 	if(commandLength > 0) {
@@ -300,83 +469,5 @@ void terminalDriver() {
 	}
         break;
     }
-  }
-}
-
-void updateSwitchTable(int switchNum, char state) {
-  int colChar;
-  if(switchNum > 18) {
-    colChar = ((switchNum-152)*4)+53;
-  }else{
-    colChar = (switchNum*3)-1;
-  }
-  outputEscape("[s[4;");
-  printInt(2, colChar, 10);
-  Putc(2, 'f');
-  Putc(2, state);
-  outputEscape("[u");
-}
-
-void initSwitchTable() {
-  int i;
-
-  moveCursor(3,1);
-  Putc(2, '|');
-  for(i=1; i<19; i++) {
-    printf("%d%d", i/10, i%10);
-    Putc(2, '|');
-  }
-  for(i=153; i<157; i++) {
-    printInt(2, i, 10);
-    Putc(2, '|');
-  }
-  moveCursor(4,1);
-  Putc(2, '|');
-  for(i=1; i<19; i++) {
-    printf("? |");
-  }
-  for(i=153; i<157; i++) {
-    printf(" ? |");
-  }
-}
-
-int saveSensor(char *buffer, int *head, int data, int byteNumber, int *states) {
-  int moduleNum = (byteNumber/2);
-  int i, stateChanged = false;
-
-  for(i=0; i<8; i++) {
-    int sensorNum = 8-i;
-    if(byteNumber%2) sensorNum += 8;
-
-    if(data%2 == 1 && states[moduleNum*16 + sensorNum - 1] == false) {
-      states[moduleNum*16 + sensorNum - 1] = true;
-      *head += 29;
-      *head %= 30;
-      buffer[*head] = (char)(sensorNum%10)+48;
-      *head += 29;
-      *head %= 30;
-      buffer[*head] = (char)(sensorNum/10)+48;
-      *head += 29;
-      *head %= 30;
-      buffer[*head] = (char)moduleNum+65;
-      stateChanged = true;
-    }else if(data%2 == 0 && states[moduleNum*16 + sensorNum - 1] == true) {
-      states[moduleNum*16 + sensorNum - 1] = false;
-      stateChanged = true;
-    }
-
-    data /= 2;
-  }
-
-  return stateChanged;
-}
-
-void printSensorList(char *buffer, int head) {
-  int i;
-
-  for(i=0; i<10; i++) {
-    printAt(6, i*4 + 1, "%c%c%c", buffer[head], buffer[head+1], buffer[head+2]);
-    head += 3;
-    head %= 30;
   }
 }

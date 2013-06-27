@@ -34,6 +34,7 @@ void OutputInit();
 
 int Getc(int channel);
 int Putc(int channel, char ch);
+int Putc2(int channel, char ch1, char ch2);
 
 void printString(int channel, char *string);
 void printUnsignedInt(int channel, unsigned int n, int base);
@@ -41,6 +42,7 @@ void printInt(int channel, int n, int base);
 void formatString(char *format, va_list va);
 void printf(char *format, ...);
 void outputEscape(char *escape);
+void clearLine(int line);
 void moveCursor(int line, int column);
 void printAt(int line, int column, char *format, ...);
 void printColored(int fColor, int bColor, char *format, ...);

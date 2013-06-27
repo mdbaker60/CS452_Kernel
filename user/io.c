@@ -114,16 +114,24 @@ int handleNewOutput(int *buffer, int *bufHead, int *bufTail, int *available, int
 
 int handleNewOutputTask(int *buffer, int *bufHead, int *bufTail, int *available, int UARTBase,
 	int cts, int input) {
+  int retVal = false;
+
   if(*available && cts) {
     *available = false;
     int *UARTData = (int *)(UARTBase + UART_DATA_OFFSET);
-    *UARTData = input;
-    return true;
+    *UARTData = input & 0xFF;
+    retVal = true;
   }else{
-    buffer[(*bufHead)++] = input;
+    buffer[(*bufHead)++] = input & 0xFF;
     *bufHead %= BUFFERSIZE;
-    return false;
   }
+
+  if((input & 0x80000000) == 0x80000000) {
+    buffer[(*bufHead)++] = (input & 0xFF00) >> 8;
+    *bufHead %= BUFFERSIZE;
+  }
+
+  return retVal;
 }
 
 void OutputInit() {
@@ -154,12 +162,13 @@ void OutputInit() {
 	  Reply(notifierCTSTid, (char *)&reply, sizeof(int));
 	  int *UART1_FLAGS = (int *)(UART1_BASE + UART_FLAG_OFFSET);
 	  if(*UART1_FLAGS & CTS_MASK) {
-	    ctsState = 1;
 	    if(bufHead[0] != bufTail[0] && available[0]) {
 	      int *UART1_DATA = (int *)(UART1_BASE + UART_DATA_OFFSET);
 	      *UART1_DATA = buffer1[bufTail[0]];
 	      bufTail[0]++;
 	      bufTail[0] %= BUFFERSIZE;
+	    }else{
+	      ctsState = 1;
 	    }
  	  }
 	}else if(src == notifier1Tid) {
@@ -204,6 +213,16 @@ int Putc(int channel, char ch) {
   msg.type = IOOUTPUT;
   msg.channel = channel;
   msg.data = (int)ch;
+  int reply;
+  Send(whoIs("Output Server"), (char *)&msg, sizeof(struct IOMessage), (char *)&reply, sizeof(int));
+  return 0;
+}
+
+int Putc2(int channel, char ch1, char ch2) {
+  struct IOMessage msg;
+  msg.type = IOOUTPUT;
+  msg.channel = channel;
+  msg.data = 0x80000000 | (ch2 << 8) | ch1;
   int reply;
   Send(whoIs("Output Server"), (char *)&msg, sizeof(struct IOMessage), (char *)&reply, sizeof(int));
   return 0;
@@ -284,6 +303,12 @@ void outputEscape(char *escape) {
   }
 }
 
+void clearLine(int line) {
+  outputEscape("[s");
+  moveCursor(line, 1);
+  outputEscape("[K[u");
+}
+
 void moveCursor(int line, int column) {
   outputEscape("[");
   printInt(2, line, 10);
@@ -295,7 +320,6 @@ void moveCursor(int line, int column) {
 void printAt(int line, int column, char *format, ...) {
   va_list va;
 
-  requestDraw();
   outputEscape("[s");
   moveCursor(line, column);
 
@@ -304,25 +328,22 @@ void printAt(int line, int column, char *format, ...) {
   va_end(va);
 
   outputEscape("[u");
-  finishedDrawing();
 }
 
 void printColored(int fColor, int bColor, char *format, ...) {
   va_list va;
 
-  requestDraw();
-  outputEscape("[");
+  /*outputEscape("[");
   printInt(2, fColor+30, 10);
   Putc(2, ';');
   printInt(2, bColor+40, 10);
-  Putc(2, 'm');
+  Putc(2, 'm');*/
 
   va_start(va, format);
   formatString(format, va);
   va_end(va);
 
-  outputEscape("[37;40m");
-  finishedDrawing();
+  //outputEscape("[37;40m");
 }
 
 void sendTrainCommand(int command) {
