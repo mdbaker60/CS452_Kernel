@@ -9,12 +9,14 @@
 #include <track.h>
 #include <prng.h>
 
-#define NUMCOMMANDS 7
+#define NUMCOMMANDS 8
 
+#define TRAINGOTO	0
+void moveToLocation(int trainNum, int source, int dest, int *velocity, track_node *track);
 void trainTracker();
-void trainController();
+void trainTask();
 struct TrainMessage {
-  int trainNum;
+  int type;
   char dest[8];
 };
 
@@ -27,7 +29,7 @@ int largestPrefix(char *str1, char *str2) {
 }
 
 int tabComplete(char *command) {
-  char *commands[NUMCOMMANDS] = {"q", "tr", "rv", "sw", "setTrack", "move", "randomizeSwitches"};
+  char *commands[NUMCOMMANDS] = {"q", "tr", "rv", "sw", "setTrack", "move", "randomizeSwitches", "init"};
 
   int length = strlen(command);
   char *arg1 = splitCommand(command);
@@ -78,6 +80,19 @@ char *splitCommand(char *command) {
   return command;
 }
 
+void initializeTrack() {
+  char trackDirection[22] = {'S', 'S', 'C', 'S', 'C', 'S', 'S', 'C', 'C', 'C', 'C', 'C', 'C', 'C', 'C', 'C', 'C', 'C', 'C', 'C', 'C', 'C'};
+
+  Delay(10);
+  int i;
+  for(i=1; i<19; i++) {
+    setSwitchState(i, trackDirection[i-1]);
+  }
+  for(i=153; i<157; i++) {
+    setSwitchState(i, trackDirection[i-135]);
+  }
+}
+
 struct trainInfo {
   int speed;
   int number;
@@ -117,7 +132,7 @@ void clockDriver() {
   }
 }
 
-void parseCommand(char *command, int *trainSpeeds) {
+void parseCommand(char *command, int *trainSpeeds, int *train) {
   char *arg1 = splitCommand(command);
   char *arg2 = splitCommand(arg1);
 
@@ -166,13 +181,7 @@ void parseCommand(char *command, int *trainSpeeds) {
       }
       if(switchDirection != 'S' && switchDirection != 'C') {
 	printColored(RED, BLACK, "\rError: switch direction must be 'S' or 'C'");
-      }else if(switchDirection == 'S') {
-	Putc2(1, (char)33, (char)switchNumber);
-	Putc(1, (char)32);
-	setSwitchState(switchNumber, switchDirection);
-      }else if(switchDirection == 'C') {
-	Putc2(1, (char)34, (char)switchNumber);
-	Putc(1, (char)32);
+      }else{
 	setSwitchState(switchNumber, switchDirection);
       }
     }
@@ -180,7 +189,7 @@ void parseCommand(char *command, int *trainSpeeds) {
     Shutdown();
   }else if(strcmp(command, "setTrack") == 0) {
     if(arg1 == command) {
-      printColored(RED, BLACK, "\rError: command setTrack expects an argument\r");
+      printColored(RED, BLACK, "\rError: command setTrack expects an argument");
     }else{
       if(arg1[1] == '\0') {
 	if(arg1[0] == 'A') {
@@ -188,39 +197,62 @@ void parseCommand(char *command, int *trainSpeeds) {
 	}else if(arg1[0] == 'B') {
 	  setTrack(TRACKB);
 	}else {
-	  printColored(RED, BLACK, "\rError: track must be A or B\r");
+	  printColored(RED, BLACK, "\rError: track must be A or B");
 	}
       }else{
-	printColored(RED, BLACK, "\rError: track must be A or B\r");
+	printColored(RED, BLACK, "\rError: track must be A or B");
       }
     }
   }else if(strcmp(command, "move") == 0) {
     if(arg1 == arg2) {
-      printColored(RED, BLACK, "\rError: command move expects two arguments\r");
+      printColored(RED, BLACK, "\rError: command move expects two arguments");
     }else{
       struct TrainMessage msg;
-      msg.trainNum = strToInt(arg1);
+      int trainNum = strToInt(arg1);
+      msg.type = TRAINGOTO;
       strcpy(msg.dest, arg2);
-      int reply, tid = Create(2, trainController);
-      Send(tid, (char *)&msg, sizeof(struct TrainMessage), (char *)&reply, sizeof(int));
+      if(train[trainNum] == -1) {
+	printColored(RED, BLACK, "\rError: train %d has not been initialized", trainNum);
+      }else{
+        int reply;
+        Send(train[trainNum], (char *)&msg, sizeof(struct TrainMessage), (char *)&reply, sizeof(int));
+      }
     }
   }else if(strcmp(command, "randomizeSwitches") == 0) {
     int i;
     seed(Time());
     for(i=0; i<18; i++) {
       int dir = random() % 2;
-      Putc2(1, (char)dir+33, (char)i);
-      Putc(1, (char)32);
+      if(dir == 0) {
+	setSwitchState(i, 'S');
+      }else{
+	setSwitchState(i, 'C');
+      }
     }
     for(i=153; i<157; i++) {
       int dir = random() % 2;
-      Putc2(1, (char)dir+33, (char)i);
-      Putc(1, (char)32);
+      if(dir == 0) {
+	setSwitchState(i, 'S');
+      }else{
+	setSwitchState(i, 'C');
+      }
+    }
+  }else if(strcmp(command, "init") == 0) {
+    if(command == arg1) {
+      printColored(RED, BLACK, "\rError: command init expects an argument");
+    }else{
+      int trainNum = strToInt(arg1);
+      if(train[trainNum] == -1) {
+	train[trainNum] = Create(1, trainTask);
+	int reply;
+	Send(train[trainNum], (char *)&trainNum, sizeof(int), (char *)&reply, sizeof(int));
+      }else{
+	printf("\rTrain %d has already been initialized");
+      }
     }
   }else{
     printColored(RED, BLACK, "\rUnrecognized command: \"%s\"", command);
   }
-  printf("\r>");
 }
 
 void copyPath(struct Path *dest, struct Path *source) {
@@ -286,19 +318,19 @@ int BFS(int node1, int node2, track_node *track, struct Path *path) {
 
 void getVelocities(int trainNum, int *velocity) {
   if(trainNum == 45) {
-    velocity[8] = 183;
-    velocity[9] = 206;
-    velocity[10] = 224;
-    velocity[11] = 252;
-    velocity[12] = 275;
-    velocity[13] = 297;
-    velocity[14] = 299;
+    velocity[8] = 376;
+    velocity[9] = 419;
+    velocity[10] = 446;
+    velocity[11] = 505;
+    velocity[12] = 552;
+    velocity[13] = 600;
+    velocity[14] = 601;
   }
 }
 
 int stoppingDistance(int velocity) {
-  int d = (295*velocity) - 7400;
-  d /= 100;
+  int d = (14195*velocity) - 1020000;
+  d /= 10000;
   return d;
 }
 
@@ -320,12 +352,12 @@ int adjDirection(track_node *src, track_node *dest) {
   return -1;
 }
 
-track_node *distanceBefore(struct Path *path, int distance, int nodeNum, int *returnDistance) {
+int distanceBefore(struct Path *path, int distance, int nodeNum, int *returnDistance) {
   int diff;
   while(true) {
     if(nodeNum == 0) {
       *returnDistance = 0;
-      return (path->node)[0];
+      return -1;
     }else{
       diff = adjDistance((path->node)[nodeNum-1], (path->node)[nodeNum]);
       if(diff < distance) {
@@ -333,7 +365,7 @@ track_node *distanceBefore(struct Path *path, int distance, int nodeNum, int *re
 	nodeNum--;
       }else{
 	*returnDistance = diff - distance;
-	return (path->node)[nodeNum-1];
+	return nodeNum-1;
       }
     }
   }
@@ -352,141 +384,146 @@ track_node *distanceBefore(struct Path *path, int distance, int nodeNum, int *re
   }*/
 }
 
-void trainController() {
+void delayTask() {
+  int delayTicks, reply = 0, src;
+  Receive(&src, (char *)&delayTicks, sizeof(int));
+  Reply(src, (char *)&reply, sizeof(int));
+
+  DelayUntil(delayTicks);
+
+  Send(src, (char *)&delayTicks, sizeof(int), (char *)&reply, sizeof(int));
+  Destroy(MyTid());
+}
+
+void sensorWaitTask() {
+  int sensorNum, reply = 0, src;
+  Receive(&src, (char *)&sensorNum, sizeof(int));
+  Reply(src, (char *)&reply, sizeof(int));
+
+  waitOnSensor(sensorNum);
+
+  Send(src, (char *)&sensorNum, sizeof(int), (char *)&reply, sizeof(int));
+  Destroy(MyTid());
+}
+
+void trainTask() {
+  int trainNum, reply = 0, src;
+  Receive(&src, (char *)&trainNum, sizeof(int));
+  Reply(src, (char *)&reply, sizeof(int));
+
   int velocity[15];
+  getVelocities(trainNum, velocity);
   track_node track[TRACK_MAX];
   initTrack(track);
 
-  int src, reply = 0;
-  struct TrainMessage msg;
-  Receive(&src, (char *)&msg, sizeof(struct TrainMessage));
-  Reply(src, (char *)&reply, sizeof(int));
-
-  int dest = 0, trainNum = msg.trainNum;
-  while(dest < TRACK_MAX && strcmp(track[dest].name, msg.dest) != 0) dest++;
-
-  getVelocities(trainNum, velocity);
-
-  struct Path path;
+  //find your location
+  int location, delta = 0;
   Putc2(1, (char)2, (char)trainNum);
-  int source = waitOnAnySensor();
+  location = waitOnAnySensor();
   Putc2(1, (char)0, (char)trainNum);
-  Putc2(1, (char)10, (char)trainNum);
+
+  struct TrainMessage msg;
+  while(true) {
+    Receive(&src, (char *)&msg, sizeof(struct TrainMessage));
+    switch(msg.type) {
+      case TRAINGOTO:
+	Reply(src, (char *)&reply, sizeof(int));
+	int dest = 0;
+	while(dest < TRACK_MAX && strcmp(track[dest].name, msg.dest) != 0) dest++;
+	moveToLocation(trainNum, location, dest, velocity, track);
+	location = dest;
+	break;
+    }
+  } 
+}
+
+void moveToLocation(int trainNum, int source, int dest, int *velocity, track_node *track) {
+  struct Path path;
 
   BFS(source, dest, track, &path);
 
+
   int stopDistance;
-  track_node *stopNode = 
+  int stopNode = 
 	distanceBefore(&path, stoppingDistance(velocity[10]), path.numNodes-1, &stopDistance);
-  printf("send stop command %d mm after node %s\r", stopDistance, stopNode->name);
 
   int curNode = 1;
-  node_type nodeType;
-  int oldSensor = source, time, oldTime = Time();
   int timeBase = Time();
 
   if(path.numNodes > 0 && (path.node[1])->type == NODE_BRANCH) {
     if(adjDirection(path.node[1], path.node[2]) == DIR_STRAIGHT) {
-      Putc2(1, (char)33, (char)(path.node[1])->num);
-      Putc(1, (char)32);
+      setSwitchState((path.node[1])->num, 'S');
     }else{
-      Putc2(1, (char)34, (char)(path.node[1])->num);
-      Putc(1, (char)32);
+      setSwitchState((path.node[1])->num, 'C');
     }
   }
 
-  while(true) {
-    if(curNode != path.numNodes-1 && (path.node[curNode+1])->type == NODE_BRANCH) {
-      if(adjDirection(path.node[curNode+1], path.node[curNode+2]) == DIR_STRAIGHT) {
-	Putc2(1, (char)33, (char)(path.node[curNode+1])->num);
-	Putc(1, (char)32);
-      }else{
-	Putc2(1, (char)34, (char)(path.node[curNode+1])->num);
-	Putc(1, (char)32);
-      }
+  int switchNode, switchDistance, stopDelay = -1;
+  Putc2(1, (char)10, (char)trainNum);
+  while(curNode < path.numNodes) {
+    if(curNode-1 == stopNode) {
+      int delayTime = stopDistance/velocity[10];
+      delayTime *= 100;
+      delayTime += timeBase;
+      stopDelay = Create(2, delayTask);
+      int reply;
+      Send(stopDelay, (char *)&delayTime, sizeof(int), (char *)&reply, sizeof(int));
     }
 
-    nodeType = (path.node[curNode])->type;
+    int offset = 0;
+    while(true) {
+      switchNode = distanceBefore(&path, 200, curNode+offset, &switchDistance);
+      if(curNode + offset == path.numNodes) {
+	break;
+      }else if((path.node[curNode+offset])->type == NODE_BRANCH && switchNode == curNode-1) {
+	int delayTime = switchDistance/velocity[10];
+	delayTime *= 100;
+	delayTime += timeBase;
+	int switchWaitTask = Create(2, delayTask);
+	int reply, src;
+	Send(switchWaitTask, (char *)&delayTime, sizeof(int), (char *)&reply, sizeof(int));
+	Receive(&src, (char *)&reply, sizeof(int));
+	if(src == stopDelay) {
+	  Putc2(1, (char)0, (char)trainNum);
+	  Destroy(stopDelay);
+	  stopDelay = -1;
+	  Receive(&src, (char *)&reply, sizeof(int));
+	}
+	Destroy(switchWaitTask);
+	if(adjDirection(path.node[curNode+offset], path.node[curNode+offset+1]) == DIR_STRAIGHT) {
+	  setSwitchState((path.node[curNode+offset])->num, 'S');
+	}else{
+	  setSwitchState((path.node[curNode+offset])->num, 'C');
+	}
+      }else if(switchNode > curNode-1) {
+	break;
+      }
+      offset++;
+    }
+    if(stopDelay != -1) {
+      int reply, src;
+      Receive(&src, (char *)&reply, sizeof(int));
+      Putc2(1, (char)0, (char)trainNum);
+      Destroy(stopDelay);
+      stopDelay = -1;
+    }
 
-    if(nodeType == NODE_SENSOR) {
-      printf("waiting on sensor %s\r", (path.node[curNode])->name);
+    //avoid deadlock if you don't quite hit the final sensor
+    if(curNode == path.numNodes-1 && stopDelay == -1) break;
+
+    if((path.node[curNode])->type == NODE_SENSOR) {
       waitOnSensor((path.node[curNode])->num);
-      time = Time();
-      int timeDelta = (time - oldTime);
-      int distance = BFS(oldSensor, (path.node[curNode])->num, track, NULL);
-      int newVelocity = (500*distance)/timeDelta;
-      velocity[10] *= 95;
-      velocity[10] += newVelocity;
-      velocity[10] /= 100;
-      oldSensor = (path.node[curNode])->num;
-      oldTime = time;
-      timeBase = time;
+      timeBase = Time();
     }else{
       int distance = adjDistance(path.node[curNode-1], path.node[curNode]);
       int delayTime = (100*distance)/velocity[10];
-      DelayUntil(timeBase+delayTime);
+      delayTime += timeBase;
+      DelayUntil(delayTime);
       timeBase = Time();
-      printf("delay: %d, distance: %d between nodes %s and %s\r", delayTime, distance, (path.node[curNode-1])->name, (path.node[curNode])->name);
     }
-
-    if(path.node[curNode] == &track[dest]) break;
 
     curNode++;
   }
-  Putc2(1, (char)0, (char)trainNum);
-  Destroy(MyTid());
-
-  /*while(true) {
-    nodeType = ((path.edge[curEdge])->dest)->type;
-    if(nodeType == NODE_SENSOR) {
-      if((path.edge[curEdge])->src == stopNode) {
-        int timeToStop = (100*stopDistance)/velocity[10];
-        Delay(timeToStop);
-        Putc2(1, (char)0, (char)trainNum);
-      }
-      if(path.numEdges > curEdge+1 && ((path.edge[curEdge+1])->dest)->type == NODE_BRANCH) {
-	curEdge++;
-	if(&(((path.edge[curEdge])->dest)->edge)[DIR_STRAIGHT] == path.edge[curEdge+1]) {
-	  Putc2(1, (char)33, (char)((path.edge[curEdge])->dest)->num);
-	  Putc(1, (char)32);
-	}else{
-	  Putc2(1, (char)34, (char)((path.edge[curEdge])->dest)->num);
-	  Putc(1, (char)32);
-	}
-	waitOnSensor(((path.edge[curEdge-1])->dest)->num);
-      }else{
-        waitOnSensor(((path.edge[curEdge])->dest)->num);
-      }
-    }else if(nodeType == NODE_BRANCH) {
-      if(&((((path.edge[curEdge])->dest)->edge)[DIR_STRAIGHT]) == path.edge[curEdge+1]) {
-	Putc2(1, (char)33, (char)((path.edge[curEdge])->dest)->num);
-	Putc(1, (char)32);
-      }else{
-	Putc2(1, (char)34, (char)((path.edge[curEdge])->dest)->num);
-	Putc(1, (char)32);
-      }
-      int distance = (path.edge[curEdge])->dist;
-      int waitTime = (100*distance)/velocity[10];
-      if((path.edge[curEdge])->src == stopNode) {
-        int timeToStop = (100*stopDistance)/velocity[10];
-        Delay(timeToStop);
-        Putc2(1, (char)0, (char)trainNum);
-	Delay(waitTime-timeToStop);
-      }else{
-	Delay(waitTime);
-      }
-    }
-
-    if((path.edge[curEdge])->dest == &track[dest]) {
-      break;
-    }
-    curEdge++;
-  }
-  
-
-  Putc2(1, (char)0, (char)trainNum);
-  printf("reached destination\r");
-  Destroy(MyTid());*/
 }
 
 void trainTracker() {
@@ -507,7 +544,7 @@ void trainTracker() {
     time = Time();
     distance = BFS(oldSensor, sensor, track, NULL);
     seconds = (time - oldTime);
-    v *= 90;
+    v *= 95;
     v += (500*distance)/seconds;
     v /= 100;
     debugMessage[10] = (char)((v/100)%10)+48;
@@ -539,13 +576,18 @@ void terminalDriver() {
   for(i=0; i<80; i++) {
     trainSpeeds[i] = 0;
   }
+  int train[80];
+  for(i=0; i<80; i++) {
+    train[i] = -1;
+  }
 
   Create(1, clockDriver);
 
   outputEscape("[2J");
+  refreshScreen();
+  initializeTrack();
   moveCursor(13, 1);
   Putc(2, '>');
-  refreshScreen();
   while(true) {
     c = (char)Getc(2);
     switch(c) {
@@ -553,14 +595,16 @@ void terminalDriver() {
 	curCommand[commandLength] = '\0';
 	strcpy(commands[commandNum], curCommand);
 	lengths[commandNum] = commandLength;
-	parseCommand(curCommand, trainSpeeds);
+	parseCommand(curCommand, trainSpeeds, train);
 	commandNum++;
 	commandNum %= NUM_SAVED_COMMANDS;
 	viewingNum = commandNum;
 	commands[commandNum][0] = '\0';
 	commandLength = 0;
 	if(totalCommands < NUM_SAVED_COMMANDS-1) totalCommands++;
-	refreshScreen();
+	moveCursor(13, 1);
+	outputEscape("[K");
+	Putc(2, '>');
 	break;
       case '\t':
 	if(commandLength > 0) {
