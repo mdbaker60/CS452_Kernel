@@ -318,6 +318,11 @@ void moveCursor(int line, int column) {
 }
 
 void printAt(int line, int column, char *format, ...) {
+  if(line < 0 || column < 0) {
+    printf("printAt given negative line or column: %d:%d\r", line, column);
+    return;
+  }
+
   va_list va;
 
   outputEscape("[s");
