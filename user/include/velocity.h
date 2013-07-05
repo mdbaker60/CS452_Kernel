@@ -39,6 +39,7 @@ int currentPosition(struct VelocityProfile *profile);
 int updateProfile(struct VelocityProfile *profile);
 int waitForStop(struct VelocityProfile *profile);
 int waitForDistance(struct VelocityProfile *profile, int distance);
+int waitForDistanceOrStop(struct VelocityProfile *profile, int distance);
 
 void setAccelerating(struct VelocityProfile *profile);
 void setDecelerating(struct VelocityProfile *profile);

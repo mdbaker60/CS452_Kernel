@@ -8,6 +8,11 @@
 
 void initVelocities(int trainNum, int *velocity) {
   if(trainNum == 45) {
+    velocity[3] = 107;
+    velocity[4] = 160;
+    velocity[5] = 216;
+    velocity[6] = 270;
+    velocity[7] = 334;
     velocity[8] = 376;
     velocity[9] = 419;
     velocity[10] = 446;
@@ -28,9 +33,14 @@ int stoppingDistance(int velocity) {
   return d;
 }
 int startingTime(int velocity) {
-  int t = (1073*velocity) - 121000;
-  t /= 1000;
-  return t;
+  //int t = (1073*velocity) - 121000;
+  //t /= 1000;
+  float t = (0.00000002288*velocity*velocity)*velocity*velocity;
+  t -= (0.000026163*velocity*velocity)*velocity;
+  t += 0.0081223*velocity*velocity;
+  t += 0.60737*velocity;
+  t -= 1.9122;
+  return (int)t;
 }
 int startingDistance(int velocity) {
   int d = (startingTime(velocity)*velocity)/200;
@@ -123,7 +133,7 @@ int currentPosition(struct VelocityProfile *profile) {
     if(profile->moving) {
       return v1*timeDelta/100;
     }else{
-      return 0;
+      return profile->accDist;
     }
   }else if(profile->accState == ACCELERATING) {
     if(timeDelta >= startingTime(v1)) {
@@ -194,7 +204,7 @@ int updateProfile(struct VelocityProfile *profile) {
   int stopNode, stopDistance;
   int curVelocity = currentVelocity(profile);
   int reverseStopLength = stoppingDistance(curVelocity);
-  reverseStopLength = (reverseStopLength < 400) ? 0 : reverseStopLength-400;
+  reverseStopLength = (reverseStopLength < 300) ? 0 : reverseStopLength-300;
   if(profile->reverseNode != -1) {
     reverseStopNode = distanceBefore(profile->path, reverseStopLength, profile->reverseNode, &reverseStopDistance);
   }else{
@@ -206,6 +216,9 @@ int updateProfile(struct VelocityProfile *profile) {
   if(src == profile->notifier) {
     Reply(src, (char *)&reply, sizeof(int));
     int offset = (profile->velocity)[profile->speed]/10;
+    if(!(profile->moving)) {
+      offset = 0;
+    }
     if(profile->accState != NONE) {
       offset = currentPosition(profile);
       offset -= profile->accDist;
@@ -226,7 +239,7 @@ int updateProfile(struct VelocityProfile *profile) {
 
     printAt(8, 1, "\e[K%s + %dcm", 
 	    ((profile->path)->node)[profile->location]->name, (profile->delta)/10);
-    printAt(9, 1, "\e[KVelocity: %dcm/s", curVelocity);
+    printAt(9, 1, "\e[KVelocity: %dcm/s", currentVelocity(profile));
   }
   return src;
 }
@@ -245,6 +258,17 @@ int waitForStop(struct VelocityProfile *profile) {
 int waitForDistance(struct VelocityProfile *profile, int distance) {
   int src;
   while(profile->delta < distance) {
+    src = updateProfile(profile);
+    if(src != profile->notifier) {
+      return src;
+    }
+  }
+  return profile->notifier;
+}
+
+int waitForDistanceOrStop(struct VelocityProfile *profile, int distance) {
+  int src;
+  while(profile->delta < distance && currentVelocity(profile) > 0) {
     src = updateProfile(profile);
     if(src != profile->notifier) {
       return src;

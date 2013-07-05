@@ -10,7 +10,7 @@
 #include <prng.h>
 #include <velocity.h>
 
-#define NUMCOMMANDS 8
+#define NUMCOMMANDS 9
 
 #define TRAINGOTO	0
 int moveToLocation(int trainNum, int source, int dest, track_node *track);
@@ -31,7 +31,7 @@ int largestPrefix(char *str1, char *str2) {
 }
 
 int tabComplete(char *command) {
-  char *commands[NUMCOMMANDS] = {"q", "tr", "rv", "sw", "setTrack", "move", "randomizeSwitches", "init"};
+  char *commands[NUMCOMMANDS] = {"q", "tr", "rv", "sw", "setTrack", "move", "randomizeSwitches", "init", "clear"};
 
   int length = strlen(command);
   char *arg1 = splitCommand(command);
@@ -51,6 +51,17 @@ int tabComplete(char *command) {
     }else if(prefix >= length) {
       maxMatched = largestPrefix(matchedIn, commands[i]);
     }
+  }
+
+  if(maxMatched == length) {
+    outputEscape("[B[100D");
+    for(i=0; i<NUMCOMMANDS; i++) {
+      int prefix = largestPrefix(command, commands[i]);
+      if(maxMatched == prefix) {
+	printf("%s\t", commands[i]);
+      }
+    }
+    outputEscape("[B");
   }
 
   if(maxMatched == -1) {
@@ -137,17 +148,18 @@ void clockDriver() {
 void parseCommand(char *command, int *trainSpeeds, int *train) {
   char *arg1 = splitCommand(command);
   char *arg2 = splitCommand(arg1);
+  char *arg3 = splitCommand(arg2);
 
   if(strcmp(command, "tr") == 0) {
     if(arg1 == arg2) {
-      printColored(RED, BLACK, "\rError: command tr expects 2 arguments");
+      printColored(RED, BLACK, "Error: command tr expects 2 arguments\r");
     }else{
       int trainNumber = strToInt(arg1);
       int trainSpeed = strToInt(arg2);
       if(trainNumber == -1 || trainNumber < 1 || trainNumber > 80) {
-	printColored(RED, BLACK, "\rError: train number must be a number between 1 and 80");
+	printColored(RED, BLACK, "Error: train number must be a number between 1 and 80\r");
       }else if(trainSpeed == -1 || trainSpeed < 0 || trainSpeed > 14) {
-	printColored(RED, BLACK, "\rError: train speed must be a number between 0 and 14");
+	printColored(RED, BLACK, "Error: train speed must be a number between 0 and 14\r");
       }else {
 	Putc2(1, (char)trainSpeed, (char)trainNumber);
 	trainSpeeds[trainNumber] = trainSpeed;
@@ -155,11 +167,11 @@ void parseCommand(char *command, int *trainSpeeds, int *train) {
     }
   }else if(strcmp(command, "rv") == 0) {
     if(arg1 == command) {
-      printColored(RED, BLACK, "\rError: command rv expects an argument");
+      printColored(RED, BLACK, "Error: command rv expects an argument\r");
     }else{
       int trainNumber = strToInt(arg1);
       if(trainNumber == -1 || trainNumber < 1 || trainNumber > 80) {
-	printColored(RED, BLACK, "\rError: train number must be a number between 1 and 80");
+	printColored(RED, BLACK, "Error: train number must be a number between 1 and 80\r");
       }else{
 	Putc2(1, (char)0, (char)trainNumber);
 	int reverseTask = Create(1, reverser);
@@ -172,7 +184,7 @@ void parseCommand(char *command, int *trainSpeeds, int *train) {
     }
   }else if(strcmp(command, "sw") == 0) {
     if(arg1 == arg2) {
-      printColored(RED, BLACK, "\rError: command sw expects two arguments");
+      printColored(RED, BLACK, "Error: command sw expects two arguments\r");
     }else{
       int switchNumber = strToInt(arg1);
       char switchDirection;
@@ -182,7 +194,7 @@ void parseCommand(char *command, int *trainSpeeds, int *train) {
 	switchDirection = '!';
       }
       if(switchDirection != 'S' && switchDirection != 'C') {
-	printColored(RED, BLACK, "\rError: switch direction must be 'S' or 'C'");
+	printColored(RED, BLACK, "Error: switch direction must be 'S' or 'C'\r");
       }else{
 	setSwitchState(switchNumber, switchDirection);
       }
@@ -193,7 +205,7 @@ void parseCommand(char *command, int *trainSpeeds, int *train) {
     Shutdown();
   }else if(strcmp(command, "setTrack") == 0) {
     if(arg1 == command) {
-      printColored(RED, BLACK, "\rError: command setTrack expects an argument");
+      printColored(RED, BLACK, "Error: command setTrack expects an argument\r");
     }else{
       if(arg1[1] == '\0') {
 	if(arg1[0] == 'A') {
@@ -201,22 +213,22 @@ void parseCommand(char *command, int *trainSpeeds, int *train) {
 	}else if(arg1[0] == 'B') {
 	  setTrack(TRACKB);
 	}else {
-	  printColored(RED, BLACK, "\rError: track must be A or B");
+	  printColored(RED, BLACK, "Error: track must be A or B\r");
 	}
       }else{
-	printColored(RED, BLACK, "\rError: track must be A or B");
+	printColored(RED, BLACK, "Error: track must be A or B\r");
       }
     }
   }else if(strcmp(command, "move") == 0) {
     if(arg1 == arg2) {
-      printColored(RED, BLACK, "\rError: command move expects two arguments");
+      printColored(RED, BLACK, "Error: command move expects two arguments\r");
     }else{
       struct TrainMessage msg;
       int trainNum = strToInt(arg1);
       msg.type = TRAINGOTO;
       strcpy(msg.dest, arg2);
       if(train[trainNum] == -1) {
-	printColored(RED, BLACK, "\rError: train %d has not been initialized", trainNum);
+	printColored(RED, BLACK, "Error: train %d has not been initialized\r", trainNum);
       }else{
         int reply;
         Send(train[trainNum], (char *)&msg, sizeof(struct TrainMessage), (char *)&reply, sizeof(int));
@@ -225,7 +237,7 @@ void parseCommand(char *command, int *trainSpeeds, int *train) {
   }else if(strcmp(command, "randomizeSwitches") == 0) {
     int i;
     seed(Time());
-    for(i=i; i<19; i++) {
+    for(i=1; i<19; i++) {
       int dir = random() % 2;
       if(dir == 0) {
 	setSwitchState(i, 'S');
@@ -243,7 +255,7 @@ void parseCommand(char *command, int *trainSpeeds, int *train) {
     }
   }else if(strcmp(command, "init") == 0) {
     if(command == arg1) {
-      printColored(RED, BLACK, "\rError: command init expects an argument");
+      printColored(RED, BLACK, "Error: command init expects an argument\r");
     }else{
       int trainNum = strToInt(arg1);
       if(train[trainNum] == -1) {
@@ -251,7 +263,7 @@ void parseCommand(char *command, int *trainSpeeds, int *train) {
 	int reply;
 	Send(train[trainNum], (char *)&trainNum, sizeof(int), (char *)&reply, sizeof(int));
       }else{
-	printf("\rTrain %d has already been initialized");
+	printf("Train %d has already been initialized\r");
       }
     }
   }else if(strcmp(command, "d") == 0) {
@@ -278,8 +290,37 @@ void parseCommand(char *command, int *trainSpeeds, int *train) {
       printAt(9, 1, "Velocity: %dmm/s\r", v);
     }
     Putc2(1, (char)0, (char)trainNum);
+  }else if(strcmp(command, "a") == 0) {
+    track_node track[TRACK_MAX];
+    initTrack(track);
+    int trainNum = 45;
+    int trainSpeed = strToInt(arg3);
+    int source = 0, dest = 0;
+    int velocity[15];
+    initVelocities(trainNum, velocity);
+    while(source < TRACK_MAX && strcmp(track[source].name, arg1) != 0) source++;
+    while(dest < TRACK_MAX && strcmp(track[dest].name, arg2) != 0) dest++;
+
+    int distance = BFS(source, dest, track, NULL);
+
+    Putc2(1, (char)trainSpeed, (char)trainNum);
+    int t0 = Time();
+    printf("Time 0: %d\r", t0);
+    waitOnSensor(dest);
+    int t2 = Time();
+    Putc2(1, (char)0, (char)trainNum);
+    printf("Time 2: %d\r", t2);
+
+    int t1 = -(200*distance)/velocity[trainSpeed];
+    t1 -= t0;
+    t1 += 2*t2;
+    printf("Time 1: %d\r", t1);
+    printf("Accelerating to speed %d takes %d ticks\r", trainSpeed, t1-t0);
+  }else if(strcmp(command, "clear") == 0) {
+    moveCursor(13, 1);
+    outputEscape("[J");
   }else{
-    printColored(RED, BLACK, "\rUnrecognized command: \"%s\"", command);
+    printColored(RED, BLACK, "Unrecognized command: \"%s\"\r", command);
   }
 }
 
@@ -382,7 +423,11 @@ int distanceBefore(struct Path *path, int distance, int nodeNum, int *returnDist
       *returnDistance = 0;
       return 0;
     }else if(((path->node)[nodeNum-1])->reverse == (path->node)[nodeNum]) {
-      *returnDistance = -1;
+      if(distance > 300) {
+        *returnDistance = -300;
+      }else{
+        *returnDistance = -300 + distance;
+      }
       return nodeNum-1;
     }else{
       diff = adjDistance((path->node)[nodeNum-1], (path->node)[nodeNum]);
@@ -458,14 +503,15 @@ void trainTask() {
   Putc2(1, (char)0, (char)trainNum);
 
   struct TrainMessage msg;
+  int dest;
   while(true) {
     Receive(&src, (char *)&msg, sizeof(struct TrainMessage));
     switch(msg.type) {
       case TRAINGOTO:
-	Reply(src, (char *)&reply, sizeof(int));
-	int dest = 0;
+	dest = 0;
 	while(dest < TRACK_MAX && strcmp(track[dest].name, msg.dest) != 0) dest++;
 	location = moveToLocation(trainNum, location, dest, track);
+	Reply(src, (char *)&reply, sizeof(int));
 	break;
     }
   } 
@@ -506,10 +552,10 @@ int moveToLocation(int trainNum, int source, int dest, track_node *track) {
 
   int curNode = 1;
 
-  if((path.node[0])->reverse == path.node[1]) {
+  /*if((path.node[0])->reverse == path.node[1]) {
     curNode++;
     Putc2(1, (char)15, (char)trainNum);
-  }
+  }*/
   profile.location = curNode-1;
 
   int switchNode, switchDistance;
@@ -519,9 +565,10 @@ int moveToLocation(int trainNum, int source, int dest, track_node *track) {
   while(curNode < path.numNodes) {
     if((path.node[curNode-1])->reverse == path.node[curNode]) {
       waitForStop(&profile);
-      printf("starting 400mm behind node %s\r", (path.node[curNode])->name);
-      profile.location = curNode;
-      profile.delta = -400;
+      if(curNode != 1) {
+        profile.location = curNode;
+        profile.delta = -300;
+      }
       Putc2(1, (char)15, (char)trainNum);
       Putc2(1, (char)speed, (char)trainNum);
       setAccelerating(&profile);
@@ -546,16 +593,22 @@ int moveToLocation(int trainNum, int source, int dest, track_node *track) {
       offset++;
     }
 
+    if(curNode == path.numNodes-1) break;
+
     int distance = adjDistance(path.node[curNode-1], path.node[curNode]);
-    if((path.node[curNode])->type == NODE_SENSOR) {
+    if(curNode == 1 && (path.node[0])->reverse == path.node[1]) {
+    }else if((path.node[curNode])->type == NODE_SENSOR) {
       int reply;
       int sensorNum = (path.node[curNode])->num;
       int sensorTask = Create(2, sensorWaitTask);
       Send(sensorTask, (char *)&sensorNum, sizeof(int), (char *)&reply, sizeof(int));
 
-      int src = waitForDistance(&profile, distance+50);
+      int src = waitForDistance(&profile, distance+800);
       if(src == periodic) {
 	printf("timeout at sensor %s\r", (path.node[curNode])->name);
+      }else{
+	int err = profile.delta - distance;
+	printf("distance error at node %s: %dmm\r", (path.node[curNode])->name, err);
       }
       Destroy(sensorTask);
     }else{
@@ -565,6 +618,23 @@ int moveToLocation(int trainNum, int source, int dest, track_node *track) {
     setLocation(&profile, curNode);
     curNode++;
   }
+  int reply;
+  int sensorNum = (path.node[curNode])->num;
+  int sensorTask = Create(2, sensorWaitTask);
+  Send(sensorTask, (char *)&sensorNum, sizeof(int), (char *)&reply, sizeof(int));
+
+  int distance = adjDistance(path.node[curNode-1], path.node[curNode]);
+  int src = waitForDistanceOrStop(&profile, distance);
+  if(src == periodic) {
+    printf("timeout at sensor %s\r", (path.node[curNode])->name);
+  }else{
+    int err = profile.delta - distance;
+    printf("distance error at node %s: %dmm\r", (path.node[curNode])->name, err);
+  }
+  Destroy(sensorTask);
+
+  setLocation(&profile, path.numNodes-1);
+  waitForStop(&profile);
   Destroy(periodic);
 
   int curLocation = 0;
@@ -608,6 +678,7 @@ void terminalDriver() {
 	curCommand[commandLength] = '\0';
 	strcpy(commands[commandNum], curCommand);
 	lengths[commandNum] = commandLength;
+	Putc(2, '\r');
 	parseCommand(curCommand, trainSpeeds, train);
 	commandNum++;
 	commandNum %= NUM_SAVED_COMMANDS;
@@ -615,7 +686,6 @@ void terminalDriver() {
 	commands[commandNum][0] = '\0';
 	commandLength = 0;
 	if(totalCommands < NUM_SAVED_COMMANDS-1) totalCommands++;
-        Putc(2, '\r');
 	Putc(2, '>');
 	break;
       case '\t':
