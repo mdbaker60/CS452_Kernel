@@ -325,6 +325,7 @@ void printAt(int line, int column, char *format, ...) {
 
   va_list va;
 
+  requestDraw();
   outputEscape("[s");
   moveCursor(line, column);
 
@@ -333,22 +334,25 @@ void printAt(int line, int column, char *format, ...) {
   va_end(va);
 
   outputEscape("[u");
+  finishedDrawing();
 }
 
 void printColored(int fColor, int bColor, char *format, ...) {
   va_list va;
 
-  /*outputEscape("[");
+  requestDraw();
+  outputEscape("[");
   printInt(2, fColor+30, 10);
   Putc(2, ';');
   printInt(2, bColor+40, 10);
-  Putc(2, 'm');*/
+  Putc(2, 'm');
 
   va_start(va, format);
   formatString(format, va);
   va_end(va);
 
-  //outputEscape("[37;40m");
+  outputEscape("[37;40m");
+  finishedDrawing();
 }
 
 void sendTrainCommand(int command) {
