@@ -12,13 +12,14 @@ struct VelocityProfile {
   int trainNum;
   struct Path *path;
   int location;
-  int delta;
-  int accDist;		//distance traveled so far during acceleration
+  float delta;
+  float accDist;		//distance traveled so far during acceleration
   int speed;
   int velocity[15];	//current train's velocity at each speed
   int moving;
   acceleration_type accState;
-  int t0, v0;
+  int t0;
+  float v0;
   int notifier;		//periodic notifier
   int reverseNode;
   int stopNode;
@@ -27,14 +28,14 @@ struct VelocityProfile {
 };
 
 void initVelocities(int trainNum, int *velocity);
-int stoppingDistance(int velocity);
-int startingTime(int velocity);
-int startingDistance(int velocity);
-int stoppingTime(int velocity);
+float stoppingDistance(float velocity);
+float startingTime(float velocity);
+float startingDistance(float velocity);
+float stoppingTime(float velocity);
 
 void initProfile(struct VelocityProfile *profile, int trainNum, int speed, struct Path *path, int source, int notifier);
-int currentVelocity(struct VelocityProfile *profile);
-int currentPosition(struct VelocityProfile *profile);
+float currentVelocity(struct VelocityProfile *profile);
+float currentPosition(struct VelocityProfile *profile);
 
 int updateProfile(struct VelocityProfile *profile);
 int waitForStop(struct VelocityProfile *profile);
