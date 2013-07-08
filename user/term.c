@@ -446,9 +446,9 @@ int BFS(int node1, int node2, track_node *track, struct Path *path, int doRevers
 
 int adjDistance(track_node *src, track_node *dest) {
   if((src->edge)[0].dest == dest) {
-    return (src->edge)[0].dist;
+    return 1000*(src->edge)[0].dist;
   }else if((src->edge)[1].dest == dest) {
-    return (src->edge)[1].dist;
+    return 1000*(src->edge)[1].dist;
   }else if(src->reverse == dest) {
     return 0;
   }
@@ -468,15 +468,16 @@ int adjDirection(track_node *src, track_node *dest) {
 
 int distanceBefore(struct Path *path, int distance, int nodeNum, int *returnDistance) {
   int diff;
+
   while(true) {
     if(nodeNum == 0) {
       *returnDistance = 0;
       return 0;
     }else if(((path->node)[nodeNum-1])->reverse == (path->node)[nodeNum]) {
-      if(distance > 300) {
-        *returnDistance = -300;
+      if(distance > 300000) {
+        *returnDistance = -300000;
       }else{
-        *returnDistance = -300 + distance;
+        *returnDistance = -300000 + distance;
       }
       return nodeNum-1;
     }else{
@@ -601,7 +602,7 @@ int moveToLocation(int trainNum, int source, int dest, track_node *track, int do
       waitForStop(&profile);
       if(curNode != 1) {
         profile.location = curNode;
-        profile.delta = -300;
+        profile.delta = -300000;
       }
       Putc2(1, (char)15, (char)trainNum);
       Putc2(1, (char)speed, (char)trainNum);
@@ -611,7 +612,7 @@ int moveToLocation(int trainNum, int source, int dest, track_node *track, int do
     profile.reverseNode = findNextReverseNode(&path, curNode);
     int offset = 0;
     while(curNode+offset < path.numNodes) {
-      switchNode = distanceBefore(&path, 200, curNode+offset, &switchDistance);
+      switchNode = distanceBefore(&path, 200000, curNode+offset, &switchDistance);
       if((path.node[curNode+offset])->type == NODE_BRANCH && switchNode == curNode-1) {
 	if(switchDistance >= 0) {
           waitForDistance(&profile, switchDistance);
@@ -637,12 +638,12 @@ int moveToLocation(int trainNum, int source, int dest, track_node *track, int do
       int sensorTask = Create(2, sensorWaitTask);
       Send(sensorTask, (char *)&sensorNum, sizeof(int), (char *)&reply, sizeof(int));
 
-      int src = waitForDistance(&profile, distance+150);
+      int src = waitForDistance(&profile, distance+150000);
       if(src == periodic) {
 	printf("timeout at sensor %s\r", (path.node[curNode])->name);
         timeout = true;
       }else{
-	float err = profile.delta - distance;
+	float err = profile.delta/1000 - distance/1000;
 	printf("distance error at node %s: %dmm\r", (path.node[curNode])->name, (int)err);
       }
       Destroy(sensorTask);
@@ -653,7 +654,7 @@ int moveToLocation(int trainNum, int source, int dest, track_node *track, int do
     setLocation(&profile, curNode);
     curNode++;
     if(timeout) {
-      profile.delta = 150;
+      profile.delta = 150000;
       timeout = false;
     }
   }
@@ -667,7 +668,7 @@ int moveToLocation(int trainNum, int source, int dest, track_node *track, int do
   if(src == periodic) {
     printf("timeout at sensor %s\r", (path.node[curNode])->name);
   }else{
-    float err = profile.delta - distance;
+    float err = profile.delta/1000 - distance/1000;
     printf("distance error at node %s: %dmm\r", (path.node[curNode])->name, (int)err);
   }
   Destroy(sensorTask);
