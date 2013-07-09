@@ -10,11 +10,12 @@
 #include <prng.h>
 #include <velocity.h>
 
-#define NUMCOMMANDS 	9
+#define NUMCOMMANDS 	10
 #define MAX_ARGS	25
 
-#define TRAINGOTO	0
-int moveToLocation(int trainNum, int source, int dest, track_node *track, int doReverse, int speed);
+#define TRAINGOTO		0
+#define TRAINCONFIGVELOCITY	1
+int moveToLocation(int trainNum, int source, int dest, track_node *track, int doReverse, int speed, int *velocity);
 int BFS(int node1, int node2, track_node *track, struct Path *path, int doReverse);
 void trainTracker();
 void trainTask();
@@ -34,7 +35,7 @@ int largestPrefix(char *str1, char *str2) {
 }
 
 int tabComplete(char *command) {
-  char *commands[NUMCOMMANDS] = {"q", "tr", "rv", "sw", "setTrack", "move", "randomizeSwitches", "init", "clear"};
+  char *commands[NUMCOMMANDS] = {"q", "tr", "rv", "sw", "setTrack", "move", "randomizeSwitches", "init", "clear", "configureVelocities"};
 
   int length = strlen(command);
   char *arg1 = splitCommand(command);
@@ -369,6 +370,20 @@ void parseCommand(char *command, int *trainSpeeds, int *train) {
   }else if(strcmp(argv[0], "clear") == 0) {
     moveCursor(13, 1);
     outputEscape("[J");
+  }else if(strcmp(argv[0], "configureVelocities") == 0) {
+    struct TrainMessage msg;
+    msg.type = TRAINCONFIGVELOCITY;
+    if(argc != 2) {
+      printColored(RED, BLACK, "Command configureVelocities expects an argument\r");
+    }else{
+      int trainNum = strToInt(getArgument(argc, argv, 0));
+      int reply;
+      if(train[trainNum] == -1) {
+	train[trainNum] = Create(2, trainTask);
+	Send(train[trainNum], (char *)&trainNum, sizeof(int), (char *)&reply, sizeof(int));
+      }
+      Send(train[trainNum], (char *)&msg, sizeof(struct TrainMessage), (char *)&reply, sizeof(int));
+    }
   }else{
     printColored(RED, BLACK, "Unrecognized command: \"%s\"\r", command);
   }
@@ -534,6 +549,9 @@ void trainTask() {
   track_node track[TRACK_MAX];
   initTrack(track);
 
+  int velocity[15];
+  initVelocities(trainNum, velocity);
+
   //find your location
   int location;
   Putc2(1, (char)2, (char)trainNum);
@@ -541,14 +559,47 @@ void trainTask() {
   Putc2(1, (char)0, (char)trainNum);
 
   struct TrainMessage msg;
-  int dest;
+  int dest,i,j;
+  int oldSensor, sensor, oldTime, time;
   while(true) {
     Receive(&src, (char *)&msg, sizeof(struct TrainMessage));
     switch(msg.type) {
       case TRAINGOTO:
 	dest = 0;
 	while(dest < TRACK_MAX && strcmp(track[dest].name, msg.dest) != 0) dest++;
-	location = moveToLocation(trainNum, location, dest, track, msg.doReverse, msg.speed);
+	location = moveToLocation(trainNum, location, dest, track, msg.doReverse, msg.speed, velocity);
+	Reply(src, (char *)&reply, sizeof(int));
+	break;
+      case TRAINCONFIGVELOCITY:
+	Putc2(1, (char)2, (char)trainNum);
+	location = waitOnAnySensor();
+	Putc2(1, (char)0, (char)trainNum);
+	//move to sensor B15
+	location = moveToLocation(trainNum, location, 30, track, false, 10, velocity);
+	setSwitchState(14, 'C');
+	setSwitchState(13, 'S');
+	setSwitchState(10, 'S');
+	setSwitchState(9, 'C');
+	setSwitchState(8, 'C');
+	setSwitchState(17, 'S');
+	setSwitchState(16, 'S');
+	setSwitchState(15, 'C');
+	for(i=8; i<15; i++) {
+	  Putc2(1, (char)i, (char)trainNum);
+	  oldSensor = waitOnAnySensor();
+	  oldTime = Time();
+	  for(j=0; j<15; j++) {
+	    sensor = waitOnAnySensor();
+	    time = Time();
+	    int distance = 1000*BFS(oldSensor, sensor, track, NULL, false);
+	    int newVelocity = distance/(time - oldTime);
+	    velocity[i] *= 95;
+	    velocity[i] += 5*newVelocity;
+	    velocity[i] /= 100;
+	  }
+	  printf("Configured speed %d to %dmm/s\r", i, velocity[i]/10);
+	}
+	Putc2(1, (char)0, (char)trainNum);
 	Reply(src, (char *)&reply, sizeof(int));
 	break;
     }
@@ -575,7 +626,7 @@ int findNextReverseNode(struct Path *path, int curNode) {
   return -1;
 }
 
-int moveToLocation(int trainNum, int source, int dest, track_node *track, int doReverse, int speed) {
+int moveToLocation(int trainNum, int source, int dest, track_node *track, int doReverse, int speed, int *velocity) {
   struct Path path;
   struct VelocityProfile profile;
 
@@ -586,7 +637,7 @@ int moveToLocation(int trainNum, int source, int dest, track_node *track, int do
 
   int periodic = Create(2, periodicTask);
 
-  initProfile(&profile, trainNum, speed, &path, source, periodic);
+  initProfile(&profile, trainNum, speed, &path, source, periodic, velocity);
 
   int curNode = 1;
 
@@ -601,7 +652,7 @@ int moveToLocation(int trainNum, int source, int dest, track_node *track, int do
     if((path.node[curNode-1])->reverse == path.node[curNode]) {
       waitForStop(&profile);
       if(curNode != 1) {
-        profile.location = curNode;
+        profile.displayLocation = curNode;
         profile.delta = -300000;
       }
       Putc2(1, (char)15, (char)trainNum);
@@ -612,7 +663,7 @@ int moveToLocation(int trainNum, int source, int dest, track_node *track, int do
     profile.reverseNode = findNextReverseNode(&path, curNode);
     int offset = 0;
     while(curNode+offset < path.numNodes) {
-      switchNode = distanceBefore(&path, 200000, curNode+offset, &switchDistance);
+      switchNode = distanceBefore(&path, (profile.velocity)[speed]*50, curNode+offset, &switchDistance);
       if((path.node[curNode+offset])->type == NODE_BRANCH && switchNode == curNode-1) {
 	if(switchDistance >= 0) {
           waitForDistance(&profile, switchDistance);

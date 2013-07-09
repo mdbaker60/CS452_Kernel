@@ -66,7 +66,8 @@ void printSensorList(int *history, int head) {
   outputEscape("[u");
 }
 
-void updateSensorInfo(struct SensorStates *oldStates, struct SensorStates *newStates, int *history,
+void updateSensorInfo(struct SensorStates *oldStates, struct SensorStates *newStates, 
+			struct SensorStates *bufferedSensors, int *history,
 			int *head, struct TrainNode **first, struct TrainNode **last) {
   int i;
   for(i=0; i<NUMSENSORS; i++) {
@@ -92,8 +93,12 @@ void updateSensorInfo(struct SensorStates *oldStates, struct SensorStates *newSt
 	    (cur->next)->last = cur->last;
 	    (cur->last)->next = cur->next;
 	  }
+	  break;
 	}
 	cur = cur->next;
+      }
+      if(cur == NULL) {
+	setSensor(bufferedSensors, i, true);
       }
 
       printSensorList(history, *head);
@@ -128,6 +133,7 @@ void changeSwitch(int switchNum, char state) {
 void TrainInit() {
   int i;
   struct SensorStates sensorStates;
+  struct SensorStates bufferedSensors;
   char switchStates[NUMSWITCHES];
   for(i=0; i<NUMSWITCHES; i++) {
     switchStates[i] = '?';
@@ -187,6 +193,11 @@ void TrainInit() {
 	Reply(src, (char *)&reply, sizeof(int));
 	break;
       case TRAINBLOCKSENSOR:
+	if(getSensor(&bufferedSensors, msg.data[0]) == true) {
+	  setSensor(&bufferedSensors, msg.data[0], false);
+	  Reply(src, (char *)&reply, sizeof(int));
+	  break;
+	}
 	tempNode = &nodes[src & 0x7F];
 	tempNode->tid = src;
 	tempNode->sensorNum = msg.data[0];
@@ -204,7 +215,7 @@ void TrainInit() {
 	newStates.stateInfo[0] = msg.data[0];
 	newStates.stateInfo[1] = msg.data[1];
 	newStates.stateInfo[2] = msg.data[2];
-	updateSensorInfo(&sensorStates, &newStates, sensorHistory, &historyHead, &first, &last);
+	updateSensorInfo(&sensorStates, &newStates, &bufferedSensors, sensorHistory, &historyHead, &first, &last);
 	reply = 0;
 	Reply(src, (char *)&reply, sizeof(int));
 	break;

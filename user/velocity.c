@@ -45,14 +45,15 @@ int stoppingTime(int velocity) {
   return (int)t;
 }
 
-void initProfile(struct VelocityProfile *profile, int trainNum, int speed, struct Path *path, int source, int notifier) {
+void initProfile(struct VelocityProfile *profile, int trainNum, int speed, struct Path *path, int source, int notifier, int *velocity) {
   profile->trainNum = trainNum;
   profile->path = path;
   profile->location = source;
+  profile->displayLocation = source;
   profile->delta = 0;
   profile->accDist = 0;
   profile->speed = speed;
-  initVelocities(trainNum, profile->velocity);
+  profile->velocity = velocity;
   profile->accState = NONE;
   profile->notifier = notifier;
   profile->reverseNode = -1;
@@ -184,7 +185,7 @@ int updateProfile(struct VelocityProfile *profile) {
     }
 
     printAt(8, 1, "\e[K%s + %dcm", 
-	    ((profile->path)->node)[profile->location]->name, (int)(profile->delta)/10000);
+	    ((profile->path)->node)[profile->displayLocation]->name, (int)(profile->delta)/10000);
     printAt(9, 1, "\e[KVelocity: %dum/tick", (int)currentVelocity(profile));
   }
   return src;
@@ -241,6 +242,7 @@ void setDecelerating(struct VelocityProfile *profile) {
 
 void setLocation(struct VelocityProfile *profile, int location) {
   profile->location = location;
+  profile->displayLocation = location;
   profile->delta = 0;
   profile->hasReversed = false;
 }

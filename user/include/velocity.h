@@ -12,10 +12,11 @@ struct VelocityProfile {
   int trainNum;
   struct Path *path;
   int location;
+  int displayLocation;
   int delta;
   int accDist;		//distance traveled so far during acceleration
   int speed;
-  int velocity[15];	//current train's velocity at each speed
+  int *velocity;	//current train's velocity at each speed
   int moving;
   acceleration_type accState;
   int t0;
@@ -33,7 +34,7 @@ int startingTime(int velocity);
 int startingDistance(int velocity);
 int stoppingTime(int velocity);
 
-void initProfile(struct VelocityProfile *profile, int trainNum, int speed, struct Path *path, int source, int notifier);
+void initProfile(struct VelocityProfile *profile, int trainNum, int speed, struct Path *path, int source, int notifier, int *velocity);
 int currentVelocity(struct VelocityProfile *profile);
 int currentPosition(struct VelocityProfile *profile);
 
