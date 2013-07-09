@@ -125,6 +125,9 @@ int main() {
     }
   }
 
+  int idleTime = taskArray[2].totalTime/(totalTime/100);
+  bwprintf(COM2, "Idle time: %d%%\r", idleTime);
+
   //turn off interupts and clocks
   *UART1Control &= ~(RIEN_MASK | TIEN_MASK);
   *UART2Control &= ~(RIEN_MASK | TIEN_MASK);

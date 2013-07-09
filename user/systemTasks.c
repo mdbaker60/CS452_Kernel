@@ -16,7 +16,7 @@ void bufferedNotifier(){
   Reply(server, (char *)&reply, sizeof(int));
 
   while(true){
-    err = AwaitEvent(eventType, msg.data, 17);
+    err = AwaitEvent(eventType, (char *)msg.data, 17);
     Send(server, (char *)&msg, sizeof(struct NotifierMessageBuf), (char *)&reply, sizeof(int));
   }
 }

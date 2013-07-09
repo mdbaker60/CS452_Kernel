@@ -21,6 +21,7 @@
 #define TRAINREFRESHSCREEN	7
 #define TRAINSETTRACK		8
 #define TRAINGETTRACK		9
+#define TRAINRESETBUFFER	10
 
 struct SensorStates {
   int stateInfo[3];
@@ -29,6 +30,7 @@ struct SensorStates {
 void TrainInit();
 
 void printTime(int min, int sec, int tenthSec);
+void resetSensorBuffer();
 void setSwitchState(int switchNum, char state);
 char getSwitchState(int switchNum);
 void waitOnSensor(int sensorNum);

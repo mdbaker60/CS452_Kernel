@@ -134,6 +134,7 @@ void TrainInit() {
   int i;
   struct SensorStates sensorStates;
   struct SensorStates bufferedSensors;
+  bufferedSensors.stateInfo[0] = bufferedSensors.stateInfo[1] = bufferedSensors.stateInfo[2] = 0;
   char switchStates[NUMSWITCHES];
   for(i=0; i<NUMSWITCHES; i++) {
     switchStates[i] = '?';
@@ -170,6 +171,9 @@ void TrainInit() {
 	reply = 0;
 	Reply(src, (char *)&reply, sizeof(int));
 	break;
+      case TRAINRESETBUFFER:
+	bufferedSensors.stateInfo[0] = bufferedSensors.stateInfo[1] = bufferedSensors.stateInfo[2] = 0;
+	Reply(src, (char *)&reply, sizeof(int));
       case TRAINSETSWITCH:
 	if(msg.data[0] <= 18 && switchStates[msg.data[0]-1] != (char)msg.data[1]) {
 	  switchStates[msg.data[0]-1] = (char)msg.data[1];
@@ -265,6 +269,15 @@ void printTime(int min, int sec, int tenthSec) {
 
 	Send(whoIs("Train Server"), (char *)&msg, sizeof(struct TrainMessage), (char *)&reply, sizeof(int));
 }
+
+void resetSensorBuffer() {
+  struct TrainMessage msg;
+  msg.type = TRAINRESETBUFFER;
+  int reply;
+
+  Send(whoIs("Train Server"), (char *)&msg, sizeof(struct TrainMessage), (char *)&reply, sizeof(int));
+}
+  
 
 void setSwitchState(int switchNum, char state) {
   struct TrainMessage msg;

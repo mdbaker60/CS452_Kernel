@@ -15,6 +15,7 @@
 
 #define TRAINGOTO		0
 #define TRAINCONFIGVELOCITY	1
+#define TRAININIT		2
 int moveToLocation(int trainNum, int source, int dest, track_node *track, int doReverse, int speed, int *velocity);
 int BFS(int node1, int node2, track_node *track, struct Path *path, int doReverse);
 void trainTracker();
@@ -308,14 +309,15 @@ void parseCommand(char *command, int *trainSpeeds, int *train) {
     if(numArgs(argc, argv) != 1) {
       printColored(RED, BLACK, "Error: command init expects an argument\r");
     }else{
+      struct TrainMessage msg;
       int trainNum = strToInt(getArgument(argc, argv, 0));
+      int reply;
       if(train[trainNum] == -1) {
 	train[trainNum] = Create(2, trainTask);
-	int reply;
 	Send(train[trainNum], (char *)&trainNum, sizeof(int), (char *)&reply, sizeof(int));
-      }else{
-	printf("Train %d has already been initialized\r");
       }
+      msg.type = TRAININIT;
+      Send(train[trainNum], (char *)&msg, sizeof(struct TrainMessage), (char *)&reply, sizeof(int));
     }
   }else if(strcmp(argv[0], "d") == 0) {
     track_node track[TRACK_MAX];
@@ -554,21 +556,25 @@ void trainTask() {
 
   //find your location
   int location;
-  Putc2(1, (char)2, (char)trainNum);
-  location = waitOnAnySensor();
-  Putc2(1, (char)0, (char)trainNum);
 
   struct TrainMessage msg;
-  int dest,i,j;
+  int dest,i,j, sensorsPassed;
   int oldSensor, sensor, oldTime, time;
   while(true) {
     Receive(&src, (char *)&msg, sizeof(struct TrainMessage));
     switch(msg.type) {
       case TRAINGOTO:
+	resetSensorBuffer();
 	dest = 0;
 	while(dest < TRACK_MAX && strcmp(track[dest].name, msg.dest) != 0) dest++;
 	location = moveToLocation(trainNum, location, dest, track, msg.doReverse, msg.speed, velocity);
 	Reply(src, (char *)&reply, sizeof(int));
+	break;
+      case TRAININIT:
+	Reply(src, (char *)&reply, sizeof(int));
+	Putc2(1, (char)2, (char)trainNum);
+	location = waitOnAnySensor();
+	Putc2(1, (char)0, (char)trainNum);
 	break;
       case TRAINCONFIGVELOCITY:
 	Putc2(1, (char)2, (char)trainNum);
@@ -588,14 +594,17 @@ void trainTask() {
 	  Putc2(1, (char)i, (char)trainNum);
 	  oldSensor = waitOnAnySensor();
 	  oldTime = Time();
+	  sensorsPassed = 0;
 	  for(j=0; j<15; j++) {
 	    sensor = waitOnAnySensor();
 	    time = Time();
 	    int distance = 1000*BFS(oldSensor, sensor, track, NULL, false);
 	    int newVelocity = distance/(time - oldTime);
+	    if(velocity[i] - newVelocity < velocity[i]/200 && sensorsPassed >= 10) break;
 	    velocity[i] *= 95;
 	    velocity[i] += 5*newVelocity;
 	    velocity[i] /= 100;
+	    ++sensorsPassed;
 	  }
 	  printf("Configured speed %d to %dmm/s\r", i, velocity[i]/10);
 	}

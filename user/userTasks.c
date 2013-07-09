@@ -12,12 +12,12 @@
 
 void firstTask() {
   Create(6, NSInit);
+  Create(0, idleTask);
   Create(6, CSInit);
   Create(6, InputInit);
   Create(6, OutputInit);
   Create(6, TrainInit);
   Create(6, DSInit);
-  Create(0, idleTask);
   Create(1, terminalDriver);
 
   Destroy(MyTid());
