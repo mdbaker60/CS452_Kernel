@@ -116,8 +116,6 @@ void sensorTask() {
   while(true) {
     getSensorData(&states);
     setSensorData(&states);
-
-    Delay(1);
   }
 }
 
@@ -174,8 +172,11 @@ void TrainInit() {
       case TRAINRESETBUFFER:
 	bufferedSensors.stateInfo[0] = bufferedSensors.stateInfo[1] = bufferedSensors.stateInfo[2] = 0;
 	Reply(src, (char *)&reply, sizeof(int));
+	break;
       case TRAINSETSWITCH:
-	if(msg.data[0] <= 18 && switchStates[msg.data[0]-1] != (char)msg.data[1]) {
+	if(msg.data[0] < 0 || msg.data[0] > 156 || (msg.data[0] > 18 && msg.data[0] < 153)) {
+	  printColored(RED, BLACK, "ERROR: train server given invalid switch number %d\r", msg.data[0]);
+	}else if(msg.data[0] <= 18 && switchStates[msg.data[0]-1] != (char)msg.data[1]) {
 	  switchStates[msg.data[0]-1] = (char)msg.data[1];
 	  printAt(4, (msg.data[0]*3)-1, "%c", (char)msg.data[1]);
 	  changeSwitch(msg.data[0], (char)msg.data[1]);
@@ -190,9 +191,9 @@ void TrainInit() {
 	break;
       case TRAINGETSWITCH:
 	if(msg.data[0] <= 18) {
-		reply = switchStates[msg.data[0]-1];
+	  reply = switchStates[msg.data[0]-1];
 	}else{
-		reply = switchStates[msg.data[0]-135];
+	  reply = switchStates[msg.data[0]-135];
 	}
 	Reply(src, (char *)&reply, sizeof(int));
 	break;
@@ -295,7 +296,7 @@ void setSwitchState(int switchNum, char state) {
 char getSwitchState(int switchNum) {
   struct TrainMessage msg;
   msg.type = TRAINGETSWITCH;
-  msg.data[0] =  switchNum;
+  msg.data[0] = switchNum;
   int reply;
 
   Send(whoIs("Train Server"), (char *)&msg, sizeof(struct TrainMessage), (char *)&reply, sizeof(int));

@@ -5,7 +5,7 @@
 #include <bwio.h>
 
 void idleTask() {
-  while(true) Pass();
+  while(true) {}
 }
 
 void bufferedNotifier(){

@@ -109,9 +109,11 @@ int main() {
   active = dequeue(readyQueue);
   active->state = ACTIVE;
 
-  int startTime, endTime;
+  int startTime, endTime = *counterValue, kernelTime = 0;
   while(active != NULL) {
     startTime = *counterValue;
+    kernelTime += startTime - endTime;
+    totalTime += startTime - endTime;
     getNextRequest(active, activeRequest);
     endTime = *counterValue;
     active->totalTime += endTime - startTime;
@@ -127,6 +129,8 @@ int main() {
 
   int idleTime = taskArray[2].totalTime/(totalTime/100);
   bwprintf(COM2, "Idle time: %d%%\r", idleTime);
+  kernelTime /= (totalTime/100);
+  bwprintf(COM2, "Kernel time: %d%%\r", kernelTime);
 
   //turn off interupts and clocks
   *UART1Control &= ~(RIEN_MASK | TIEN_MASK);

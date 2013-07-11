@@ -287,11 +287,13 @@ void printf(char *format, ...) {
   va_list va;
 
   va_start(va, format);
+  requestDraw();
   formatString(format, va);
+  finishedDrawing();
   va_end(va);
 }
 
-void outputEscape(char *escape) {
+void outputEscape_unsafe(char *escape) {
   while(*escape != '\0') {
     if(*escape == '[') {
       Putc(2, '\x1B');
@@ -303,37 +305,50 @@ void outputEscape(char *escape) {
   }
 }
 
-void clearLine(int line) {
-  outputEscape("[s");
-  moveCursor(line, 1);
-  outputEscape("[K[u");
+void outputEscape(char *escape) {
+  requestDraw();
+  outputEscape_unsafe(escape);
+  finishedDrawing();
 }
 
-void moveCursor(int line, int column) {
-  outputEscape("[");
+void moveCursor_unsafe(int line, int column) {
+  outputEscape_unsafe("[");
   printInt(2, line, 10);
   Putc(2, ';');
   printInt(2, column, 10);
   Putc(2, 'f');
 }
 
-void printAt(int line, int column, char *format, ...) {
-  if(line < 0 || column < 0) {
-    printf("printAt given negative line or column: %d:%d\r", line, column);
-    return;
-  }
+void moveCursor(int line, int column) {
+  requestDraw();
+  moveCursor_unsafe(line, column);
+  finishedDrawing();
+}
 
+void clearLine_unsafe(int line) {
+  outputEscape_unsafe("[s");
+  moveCursor_unsafe(line, 1);
+  outputEscape_unsafe("[K[u");
+}
+
+void clearLine(int line) {
+  requestDraw();
+  clearLine_unsafe(line);
+  finishedDrawing();
+}
+
+void printAt(int line, int column, char *format, ...) {
   va_list va;
 
   requestDraw();
-  outputEscape("[s");
-  moveCursor(line, column);
+  outputEscape_unsafe("[s");
+  moveCursor_unsafe(line, column);
 
   va_start(va, format);
   formatString(format, va);
   va_end(va);
 
-  outputEscape("[u");
+  outputEscape_unsafe("[u");
   finishedDrawing();
 }
 
@@ -341,7 +356,7 @@ void printColored(int fColor, int bColor, char *format, ...) {
   va_list va;
 
   requestDraw();
-  outputEscape("[");
+  outputEscape_unsafe("[");
   printInt(2, fColor+30, 10);
   Putc(2, ';');
   printInt(2, bColor+40, 10);
@@ -351,7 +366,7 @@ void printColored(int fColor, int bColor, char *format, ...) {
   formatString(format, va);
   va_end(va);
 
-  outputEscape("[37;40m");
+  outputEscape_unsafe("[37;40m");
   finishedDrawing();
 }
 
@@ -420,7 +435,11 @@ void DSInit() {
 
 int requestDraw() {
   int messageType = DRAWSTART, reply;
-  Send(whoIs("Draw Server"), (char *)&messageType, sizeof(int), (char *)&reply, sizeof(int));
+  int serverTid = whoIs("Draw Server");
+  while(serverTid == -1) {
+    serverTid = whoIs("Draw Server");
+  }
+  Send(serverTid, (char *)&messageType, sizeof(int), (char *)&reply, sizeof(int));
   return 0;
 }
 
