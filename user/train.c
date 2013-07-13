@@ -10,11 +10,13 @@
 struct TrainMessage {
   int type;
   int data[3];
+  int tid;
 };
 
 struct TrainMessageBuf {
   int type;
   int data[3];
+  int tid;
   char buffer[128];
 };
 
@@ -80,7 +82,7 @@ void updateSensorInfo(struct SensorStates *oldStates, struct SensorStates *newSt
       struct TrainNode *cur = *first;
       while(cur != NULL) {
 	if(cur->sensorNum == i || cur->sensorNum == ANYSENSOR) {
-	  Reply(cur->tid, (char *)&i, sizeof(int));
+	  int replyVal = Reply(cur->tid, (char *)&i, sizeof(int));
 	  if(cur->last == NULL && cur->next == NULL) {
 	    *first = *last = NULL;
 	  }else if(cur->last == NULL) {
@@ -93,7 +95,7 @@ void updateSensorInfo(struct SensorStates *oldStates, struct SensorStates *newSt
 	    (cur->next)->last = cur->last;
 	    (cur->last)->next = cur->next;
 	  }
-	  break;
+	  if(replyVal >= 0) break;
 	}
 	cur = cur->next;
       }
@@ -161,7 +163,7 @@ void TrainInit() {
   while(true) {
     Receive(&src, (char *)&msg, sizeof(struct TrainMessageBuf));
     switch(msg.type) {
-      case TRAINPRINTCLOCK:
+      case TRACKPRINTCLOCK:
 	min = msg.data[0];
 	sec = msg.data[1];
 	tenthSec = msg.data[2];
@@ -169,11 +171,15 @@ void TrainInit() {
 	reply = 0;
 	Reply(src, (char *)&reply, sizeof(int));
 	break;
-      case TRAINRESETBUFFER:
+      case TRACKRESETBUFFER:
 	bufferedSensors.stateInfo[0] = bufferedSensors.stateInfo[1] = bufferedSensors.stateInfo[2] = 0;
+	while(first != NULL) {
+	  Reply(first->tid, (char *)&reply, sizeof(int));
+	  first = first->next;
+	}
 	Reply(src, (char *)&reply, sizeof(int));
 	break;
-      case TRAINSETSWITCH:
+      case TRACKSETSWITCH:
 	if(msg.data[0] < 0 || msg.data[0] > 156 || (msg.data[0] > 18 && msg.data[0] < 153)) {
 	  printColored(RED, BLACK, "ERROR: train server given invalid switch number %d\r", msg.data[0]);
 	}else if(msg.data[0] <= 18 && switchStates[msg.data[0]-1] != (char)msg.data[1]) {
@@ -189,7 +195,7 @@ void TrainInit() {
 	reply = 0;
 	Reply(src, (char *)&reply, sizeof(int));
 	break;
-      case TRAINGETSWITCH:
+      case TRACKGETSWITCH:
 	if(msg.data[0] <= 18) {
 	  reply = switchStates[msg.data[0]-1];
 	}else{
@@ -197,12 +203,13 @@ void TrainInit() {
 	}
 	Reply(src, (char *)&reply, sizeof(int));
 	break;
-      case TRAINBLOCKSENSOR:
+      case TRACKBLOCKSENSOR:
 	if(getSensor(&bufferedSensors, msg.data[0]) == true) {
 	  setSensor(&bufferedSensors, msg.data[0], false);
 	  Reply(src, (char *)&reply, sizeof(int));
 	  break;
 	}
+	tempNode = first;
 	tempNode = &nodes[src & 0x7F];
 	tempNode->tid = src;
 	tempNode->sensorNum = msg.data[0];
@@ -216,7 +223,7 @@ void TrainInit() {
 		last = tempNode;
 	}
 	break;
-      case TRAINSETSENSORS:
+      case TRACKSETSENSORS:
 	newStates.stateInfo[0] = msg.data[0];
 	newStates.stateInfo[1] = msg.data[1];
 	newStates.stateInfo[2] = msg.data[2];
@@ -224,7 +231,7 @@ void TrainInit() {
 	reply = 0;
 	Reply(src, (char *)&reply, sizeof(int));
 	break;
-      case TRAINPRINTDEBUG:
+      case TRACKPRINTDEBUG:
 	outputEscape("[s");
 	moveCursor(7+msg.data[0], 1);
 	outputEscape("[K");
@@ -233,7 +240,7 @@ void TrainInit() {
 	reply = 0;
 	Reply(src, (char *)&reply, sizeof(int));
 	break;
-      case TRAINREFRESHSCREEN:
+      case TRACKREFRESHSCREEN:
 	printAt(1, 1, "%d%d:%d%d:%d", min/10, min%10, sec/10, sec%10, tenthSec);
 	printSwitchTable(switchStates);
 	printSensorList(sensorHistory, historyHead);
@@ -247,33 +254,63 @@ void TrainInit() {
 	reply = 0;
 	Reply(src, (char *)&reply, sizeof(int));
 	break;
-      case TRAINSETTRACK:
+      case TRACKSETTRACK:
 	activeTrack = msg.data[0];
 	reply = 0;
 	Reply(src, (char *)&reply, sizeof(int));
 	break;
-      case TRAINGETTRACK:
+      case TRACKGETTRACK:
 	reply = activeTrack;
+	Reply(src, (char *)&reply, sizeof(int));
+	break;
+      case TRACKREMOVETASK:
+	tempNode = first;
+	while(tempNode != NULL) {
+	  if(tempNode->tid == msg.tid) {
+	    if(tempNode->next == NULL && tempNode->last == NULL) {
+	      first = last = NULL;
+	    }else if(tempNode->next == NULL) {
+	      last = tempNode->last;
+	      last->next = NULL;
+	    }else if(tempNode->last == NULL) {
+	      first = tempNode->next;
+	      first->last = NULL;
+	    }else{
+	      (tempNode->last)->next = tempNode->next;
+	      (tempNode->next)->last = tempNode->last;
+	    }
+	  }
+	  tempNode = tempNode->next;
+	}
 	Reply(src, (char *)&reply, sizeof(int));
 	break;
     }
   }
 }
 
-void printTime(int min, int sec, int tenthSec) {
-	struct TrainMessage msg;
-	msg.type = TRAINPRINTCLOCK;
-	msg.data[0] = min;
-	msg.data[1] = sec;
-	msg.data[2] = tenthSec;
-	int reply;
+void removeSensorTask(int taskID) {
+  struct TrainMessage msg;
+  msg.type = TRACKREMOVETASK;
+  msg.tid = taskID;
+  int reply;
 
-	Send(whoIs("Train Server"), (char *)&msg, sizeof(struct TrainMessage), (char *)&reply, sizeof(int));
+  Send(whoIs("Train Server"), (char *)&msg, sizeof(struct TrainMessage), (char *)&reply, sizeof(int));
+}
+
+void printTime(int min, int sec, int tenthSec) {
+  struct TrainMessage msg;
+  msg.type = TRACKPRINTCLOCK;
+  msg.data[0] = min;
+  msg.data[1] = sec;
+  msg.data[2] = tenthSec;
+  int reply;
+
+  Send(whoIs("Train Server"), (char *)&msg, sizeof(struct TrainMessage), (char *)&reply, sizeof(int));
 }
 
 void resetSensorBuffer() {
   struct TrainMessage msg;
-  msg.type = TRAINRESETBUFFER;
+  msg.type = TRACKRESETBUFFER;
   int reply;
 
   Send(whoIs("Train Server"), (char *)&msg, sizeof(struct TrainMessage), (char *)&reply, sizeof(int));
@@ -282,7 +319,7 @@ void resetSensorBuffer() {
 
 void setSwitchState(int switchNum, char state) {
   struct TrainMessage msg;
-  msg.type = TRAINSETSWITCH;
+  msg.type = TRACKSETSWITCH;
   msg.data[0] = switchNum;
   msg.data[1] = (int)state;
   int reply;
@@ -295,7 +332,7 @@ void setSwitchState(int switchNum, char state) {
 
 char getSwitchState(int switchNum) {
   struct TrainMessage msg;
-  msg.type = TRAINGETSWITCH;
+  msg.type = TRACKGETSWITCH;
   msg.data[0] = switchNum;
   int reply;
 
@@ -306,7 +343,7 @@ char getSwitchState(int switchNum) {
 
 void waitOnSensor(int sensorNum) {
   struct TrainMessage msg;
-  msg.type = TRAINBLOCKSENSOR;
+  msg.type = TRACKBLOCKSENSOR;
   msg.data[0] = sensorNum;
   int reply;
 
@@ -315,7 +352,7 @@ void waitOnSensor(int sensorNum) {
 
 int waitOnAnySensor() {
   struct TrainMessage msg;
-  msg.type = TRAINBLOCKSENSOR;
+  msg.type = TRACKBLOCKSENSOR;
   msg.data[0] = ANYSENSOR;
   int reply;
 
@@ -326,7 +363,7 @@ int waitOnAnySensor() {
 
 void setSensorData(struct SensorStates *states) {
   struct TrainMessage msg;
-  msg.type = TRAINSETSENSORS;
+  msg.type = TRACKSETSENSORS;
   msg.data[0] = states->stateInfo[0];
   msg.data[1] = states->stateInfo[1];
   msg.data[2] = states->stateInfo[2];
@@ -337,7 +374,7 @@ void setSensorData(struct SensorStates *states) {
 
 void printDebugInfo(int line, char *debugInfo) {
   struct TrainMessageBuf msg;
-  msg.type = TRAINPRINTDEBUG;
+  msg.type = TRACKPRINTDEBUG;
   msg.data[0] = line;
   strcpy(msg.buffer, debugInfo);
   int reply;
@@ -347,7 +384,7 @@ void printDebugInfo(int line, char *debugInfo) {
 
 void refreshScreen() {
   struct TrainMessage msg;
-  msg.type = TRAINREFRESHSCREEN;
+  msg.type = TRACKREFRESHSCREEN;
   int reply;
 
   int server = whoIs("Train Server");
@@ -360,7 +397,7 @@ void refreshScreen() {
 
 void setTrack(int track) {
   struct TrainMessage msg;
-  msg.type = TRAINSETTRACK;
+  msg.type = TRACKSETTRACK;
   msg.data[0] = track;
   int reply;
 
@@ -369,7 +406,7 @@ void setTrack(int track) {
 
 int getTrack() {
   struct TrainMessage msg;
-  msg.type = TRAINGETTRACK;
+  msg.type = TRACKGETTRACK;
   int reply;
 
   Send(whoIs("Train Server"), (char *)&msg, sizeof(struct TrainMessage), (char *)&reply, sizeof(int));

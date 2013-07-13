@@ -3,7 +3,7 @@ AS = as
 
 ASFLAGS = -mcpu=arm920t -mapcs-32
 
-all: ../bin/string.o ../bin/prng.o ../bin/memcpy.o
+all: ../bin/string.o ../bin/prng.o ../bin/memcpy.o ../bin/math.o
 
 ../bin/memcpy.o: memcpy.s
 	$(AS) $(ASFLAGS) -o ../bin/memcpy.o memcpy.s

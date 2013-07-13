@@ -11,17 +11,18 @@
 #define NUMSWITCHES 	22
 #define ANYSENSOR	80
 
-#define TRAINPRINTCLOCK		0
-#define TRAINSETSWITCH		1
-#define TRAINGETSWITCH		2
-#define	TRAINGETSENSOR		3
-#define TRAINBLOCKSENSOR	4
-#define TRAINSETSENSORS		5
-#define TRAINPRINTDEBUG		6
-#define TRAINREFRESHSCREEN	7
-#define TRAINSETTRACK		8
-#define TRAINGETTRACK		9
-#define TRAINRESETBUFFER	10
+#define TRACKPRINTCLOCK		0
+#define TRACKSETSWITCH		1
+#define TRACKGETSWITCH		2
+#define	TRACKGETSENSOR		3
+#define TRACKBLOCKSENSOR	4
+#define TRACKSETSENSORS		5
+#define TRACKPRINTDEBUG		6
+#define TRACKREFRESHSCREEN	7
+#define TRACKSETTRACK		8
+#define TRACKGETTRACK		9
+#define TRACKRESETBUFFER	10
+#define TRACKREMOVETASK		11
 
 struct SensorStates {
   int stateInfo[3];
@@ -47,5 +48,7 @@ void setSensor(struct SensorStates *states, int sensorNum, int state);
 int getSensor(struct SensorStates *states, int sensorNum);
 int setSensorByte(struct SensorStates *states, int byteNum, int byte);
 void getSensorData(struct SensorStates *states);
+
+void removeSensorTask(int taskID);
 
 #endif
