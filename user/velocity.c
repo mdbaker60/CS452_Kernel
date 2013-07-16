@@ -7,7 +7,7 @@
 #include <term.h>
 
 void initVelocities(int trainNum, int *velocity) {
-  if(trainNum == 45) {
+  if(trainNum == 45 || trainNum == 48) {
     velocity[0] = 0;
     velocity[1] = 0;
     velocity[2] = 0;

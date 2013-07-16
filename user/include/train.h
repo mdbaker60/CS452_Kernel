@@ -21,8 +21,7 @@
 #define TRACKREFRESHSCREEN	7
 #define TRACKSETTRACK		8
 #define TRACKGETTRACK		9
-#define TRACKRESETBUFFER	10
-#define TRACKREMOVETASK		11
+#define TRACKREMOVETASK		10
 
 struct SensorStates {
   int stateInfo[3];
@@ -31,10 +30,10 @@ struct SensorStates {
 void TrainInit();
 
 void printTime(int min, int sec, int tenthSec);
-void resetSensorBuffer();
 void setSwitchState(int switchNum, char state);
 char getSwitchState(int switchNum);
 void waitOnSensor(int sensorNum);
+int waitOnSensors(struct SensorStates *sensors);
 int waitOnAnySensor();
 void setSensorData(struct SensorStates *states);
 void printDebugInfo(int line, char *debugInfo);
