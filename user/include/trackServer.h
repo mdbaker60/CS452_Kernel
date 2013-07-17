@@ -1,0 +1,60 @@
+#ifndef __TRACKSERVER_H__
+#define __TRACKSERVER_H__
+
+#include <track_node.h>
+
+#define TRACKA		0
+#define TRACKB		1
+
+#define NUMTRAINS 	80
+#define NUMSENSORS	80
+#define NUMSWITCHES 	22
+#define ANYSENSOR	80
+
+#define TRACKPRINTCLOCK		0
+#define TRACKSETSWITCH		1
+#define TRACKGETSWITCH		2
+#define	TRACKGETSENSOR		3
+#define TRACKBLOCKSENSOR	4
+#define TRACKSETSENSORS		5
+#define TRACKPRINTDEBUG		6
+#define TRACKREFRESHSCREEN	7
+#define TRACKSETTRACK		8
+#define TRACKGETTRACK		9
+#define TRACKREMOVETASK		10
+#define TRACKRESERVE		11
+#define TRACKRESERVEBLOCK	12
+#define TRACKUNRESERVE		13
+
+struct SensorStates {
+  int stateInfo[3];
+};
+
+void TrackServerInit();
+
+void printTime(int min, int sec, int tenthSec);
+void setSwitchState(int switchNum, char state);
+char getSwitchState(int switchNum);
+void waitOnSensor(int sensorNum);
+int waitOnSensors(struct SensorStates *sensors);
+int waitOnAnySensor();
+void setSensorData(struct SensorStates *states);
+void printDebugInfo(int line, char *debugInfo);
+void refreshScreen();
+void setTrack(int track);
+int getTrack();
+
+int getReservation(int node1, int node2);
+int blockOnReservation(int node1, int node2);
+void returnReservation(int node1, int node2);
+
+void initTrack(track_node *track);
+
+void setSensor(struct SensorStates *states, int sensorNum, int state);
+int getSensor(struct SensorStates *states, int sensorNum);
+int setSensorByte(struct SensorStates *states, int byteNum, int byte);
+void getSensorData(struct SensorStates *states);
+
+void removeSensorTask(int taskID);
+
+#endif
