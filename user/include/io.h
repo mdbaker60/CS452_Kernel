@@ -44,6 +44,7 @@ void printf(char *format, ...);
 void outputEscape(char *escape);
 void clearLine(int line);
 void moveCursor(int line, int column);
+void printColoredAt(int fColor, int bColor, int line, int column, char *format, ...);
 void printAt(int line, int column, char *format, ...);
 void printColored(int fColor, int bColor, char *format, ...);
 void sendTrainCommand(int command);

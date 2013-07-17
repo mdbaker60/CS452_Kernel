@@ -337,6 +337,27 @@ void clearLine(int line) {
   finishedDrawing();
 }
 
+void printColoredAt(int fColor, int bColor, int line, int column, char *format, ...) {
+  va_list va;
+
+  requestDraw();
+  outputEscape_unsafe("[");
+  printInt(2, fColor+30, 10);
+  Putc(2, ';');
+  printInt(2, bColor+40, 10);
+  Putc(2, 'm');
+
+  outputEscape_unsafe("[s");
+  moveCursor_unsafe(line, column);
+
+  va_start(va, format);
+  formatString(format, va);
+  va_end(va);
+
+  outputEscape_unsafe("[u[37;40m");
+  finishedDrawing();
+}
+
 void printAt(int line, int column, char *format, ...) {
   va_list va;
 

@@ -2,52 +2,130 @@
 #define __TRAIN_H__
 
 #include <track_node.h>
+#include <velocity.h>
 
-#define TRACKA		0
-#define TRACKB		1
+#define TRAINUPDATELOCATION	0
+#define TRAINGOTO		1
+#define TRAINCONFIGVELOCITY	2
+#define TRAININIT		3
+#define TRAINSETLOCATION	4
+#define TRAINSETDISPLAYLOC	5
+#define TRAINWAITFORLOCATION	6
+#define TRAINWAITFORSTOP	7
+#define TRAINSETACC		8
+#define TRAINSETDEC		9
+#define TRAINGETLOCATION	10
+#define TRAINGETVELOCITY	11
+#define TRAINGETMAXVELOCITY	12
+#define TRAINREMOVETASK		13
+#define TRAINGETACCSTATE	14
+#define TRAINREVERSE		15
+#define TRAINGETDIR		16
+#define TRAINSETCOLOR		17
+#define TRAINGETCOLOR		18
+#define TRAINDRIVERDONE		19
+#define TRAINCONFIGDONE		20
+#define TRAINSETSPEED		21
 
-#define NUMTRAINS 	80
-#define NUMSENSORS	80
-#define NUMSWITCHES 	22
-#define ANYSENSOR	80
+#define CHECKSTOP		0
+#define SWITCHDONE		1
+#define NODEDONE		2
+#define SENSORDONE		3
+#define SENSORMISSED		4
+#define SWITCH0MISSED		5
+#define SWITCH1MISSED		6
+#define SWITCH2MISSED		7
+#define RESERVEDONE		8
 
-#define TRACKPRINTCLOCK		0
-#define TRACKSETSWITCH		1
-#define TRACKGETSWITCH		2
-#define	TRACKGETSENSOR		3
-#define TRACKBLOCKSENSOR	4
-#define TRACKSETSENSORS		5
-#define TRACKPRINTDEBUG		6
-#define TRACKREFRESHSCREEN	7
-#define TRACKSETTRACK		8
-#define TRACKGETTRACK		9
-#define TRACKREMOVETASK		10
+#define PERIODICSTOP		2
 
-struct SensorStates {
-  int stateInfo[3];
+#define TIMEOUTLENGTH		100000
+#define REVERSEOVERSHOOT	100000
+#define PICKUPLENGTH		48000
+
+struct TrainDriverMessage {
+  int trainNum;
+  int source;
+  int dest;
+  int doReverse;
+  int velocity[15];
 };
 
-void TrainInit();
+struct TrainMessage {
+  int type;
+  char dest[8];
+  int doReverse;
+  int speed;
+  int location;
+  int delta;
+  int tid;
+  int color;
+};
 
-void printTime(int min, int sec, int tenthSec);
-void setSwitchState(int switchNum, char state);
-char getSwitchState(int switchNum);
-void waitOnSensor(int sensorNum);
-int waitOnSensors(struct SensorStates *sensors);
-int waitOnAnySensor();
-void setSensorData(struct SensorStates *states);
-void printDebugInfo(int line, char *debugInfo);
-void refreshScreen();
-void setTrack(int track);
-int getTrack();
+struct TrainVelocityMessage {
+  int type;
+  char dest[8];
+  int doReverse;
+  int speed;
+  int location;
+  int delta;
+  int tid;
+  int color;
+  int velocity[15];
+};
 
-void initTrack(track_node *track);
+typedef enum {
+  DIR_FORWARD,
+  DIR_BACKWARD
+} train_direction;
 
-void setSensor(struct SensorStates *states, int sensorNum, int state);
-int getSensor(struct SensorStates *states, int sensorNum);
-int setSensorByte(struct SensorStates *states, int byteNum, int byte);
-void getSensorData(struct SensorStates *states);
+void copyPath(struct Path *dest, struct Path *source);
+int shortestPath(int node1, int node2, track_node *track, struct Path *path, int doReverse);
+int BFS(int node1, int node2, track_node *track, struct Path *path, int doReverse);
+int adjDistance(track_node *src, track_node *dest);
+int adjDirection(track_node *src, track_node *dest);
+track_edge *adjEdge(track_node *src, track_node *dest);
+int distanceAfter(struct Path *path, int distance, int nodeNum, int *returnDistance);
+int distanceBefore(struct Path *path, int distance, int nodeNum, int *returnDistance);
 
-void removeSensorTask(int taskID);
+void periodicTask();
+void delayTask();
+void sensorWaitTask();
+void stopWaitTask();
+void locationWaitTask();
+
+void trainTask();
+void removeTrainTask(int trainTid, int taskID);
+void setTrainLocation(int trainTId, int location, int delta);
+void waitForLocation(int trainTid, int location, int delta);
+void waitForStop(int trainTid);
+void setAccelerating(int trainTid);
+void setDecelerating(int trainTid);
+int getTrainLocation(int trainTid, int *location);
+int getTrainVelocity(int trainTid);
+int getTrainMaxVelocity(int trainTid);
+acceleration_type getAccState(int trainTid);
+void reverseTrain(int trainTid);
+train_direction getTrainDirection(int trainTid);
+void setTrainColor(int trainTid, int color);
+int getTrainColor(int trainTid);
+void setTrainSpeed(int trainTid, int speed);
+
+int getNodeIndex(track_node *track, track_node *location);
+
+int getNextStop(struct Path *path, int curNode);
+int getNextSwitch(struct Path *path, int curNode);
+int getNextSensor(struct Path *path, int curNode);
+void getAllBranchMissSensors(struct Path *path, int curNode, int *sensors, int *switches);
+int getNextSensorForTrackState(track_node *track);
+int distanceAlongPath(struct Path *path, track_node *node1, track_node *node2);
+
+void switchWatcher();
+void nodeWatcher();
+void sensorWatcher();
+void reserveWatcher();
+void trainDriver();
+
+void trainConfiger();
 
 #endif
