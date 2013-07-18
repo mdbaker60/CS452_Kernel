@@ -26,6 +26,7 @@
 #define TRAINDRIVERDONE		19
 #define TRAINCONFIGDONE		20
 #define TRAINSETSPEED		21
+#define TRAINGETID		22
 
 #define CHECKSTOP		0
 #define SWITCHDONE		1
@@ -79,6 +80,8 @@ typedef enum {
   DIR_BACKWARD
 } train_direction;
 
+char *getHomeFromTrainID(int trainID);
+
 void copyPath(struct Path *dest, struct Path *source);
 int shortestPath(int node1, int node2, track_node *track, struct Path *path, int doReverse);
 int BFS(int node1, int node2, track_node *track, struct Path *path, int doReverse);
@@ -110,6 +113,9 @@ train_direction getTrainDirection(int trainTid);
 void setTrainColor(int trainTid, int color);
 int getTrainColor(int trainTid);
 void setTrainSpeed(int trainTid, int speed);
+int getTrainID(int trainTid);
+
+void trainGoHome(int trainTid);
 
 int getNodeIndex(track_node *track, track_node *location);
 

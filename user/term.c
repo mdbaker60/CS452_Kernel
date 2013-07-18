@@ -399,10 +399,37 @@ void parseCommand(char *command, int *trainSpeeds, int *train) {
       printColored(RED, BLACK, "Usage: configureVelocities\r");
     }else{
       int trainNum;
-      int reply;
+      int src, reply;
+
+      //move all trains home
+      int numTrains = 0;
+      int trainCommandTasks[6];
       for(trainNum=0; trainNum<80; trainNum++) {
 	if(train[trainNum] != -1) {
+	  trainCommandTasks[numTrains] = Create(2, moveTrainTask);
+	  msg.type = TRAINGOTO;
+	  strcpy(msg.dest, getHomeFromTrainID(getTrainID(train[trainNum])));
+	  msg.doReverse = false;
+	  msg.speed = 10;
+	  Send(trainCommandTasks[numTrains], (char *)&msg, sizeof(struct TrainMessage),
+	       (char *)&reply, sizeof(int));
+	  Send(trainCommandTasks[numTrains], (char *)&train[trainNum], sizeof(int), 
+	       (char *)&reply, sizeof(int));
+	  ++numTrains;
+	}
+      }
+      int i;
+      for(i=0; i<numTrains; i++) {
+	Receive(&src, (char *)&reply, sizeof(int));
+	Reply(src, (char *)&reply, sizeof(int));
+      }
+
+      //do configuration loop 1 by 1
+      for(trainNum=0; trainNum<80; trainNum++) {
+	msg.type = TRAINCONFIGVELOCITY;
+	if(train[trainNum] != -1) {
           Send(train[trainNum], (char *)&msg, sizeof(struct TrainMessage), (char *)&reply, sizeof(int));
+	  printf("train %d done configuring\r", trainNum);
 	}
       }
     }
@@ -415,7 +442,7 @@ void parseCommand(char *command, int *trainSpeeds, int *train) {
       if(train[trainNum] != -1) {
 	printColored(RED, BLACK, "Train %d already added\r", trainNum);
       }else{
-	train[trainNum] = Create(2, trainTask);
+	train[trainNum] = Create(5, trainTask);
 	Send(train[trainNum], (char *)&trainNum, sizeof(int), (char *)&reply, sizeof(int));
       }
     }

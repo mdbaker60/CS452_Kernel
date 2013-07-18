@@ -25,6 +25,8 @@
 #define TRACKRESERVE		11
 #define TRACKRESERVEBLOCK	12
 #define TRACKUNRESERVE		13
+#define TRACKGETNUM		14
+#define TRACKRELEASEALLRESERV	15
 
 struct SensorStates {
   int stateInfo[3];
@@ -43,9 +45,11 @@ void printDebugInfo(int line, char *debugInfo);
 void refreshScreen();
 void setTrack(int track);
 int getTrack();
+int getMyTrainID();
+void releaseAllReservations(int trainTid, int node1, int node2);
 
-int getReservation(int node1, int node2);
-int blockOnReservation(int node1, int node2);
+int getReservation(int trainTid, int node1, int node2);
+int blockOnReservation(int trainTid, int node1, int node2);
 void returnReservation(int node1, int node2);
 
 void initTrack(track_node *track);

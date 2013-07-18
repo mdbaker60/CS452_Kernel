@@ -32,6 +32,7 @@ struct ReserveNode {
   int tid;
   track_edge *edge;
   track_edge *reverseEdge;
+  int train;
   struct ReserveNode *next;
   struct ReserveNode *last;
 };
@@ -164,6 +165,7 @@ void TrackServerInit() {
 
   RegisterAs("Track Server");
 
+  int numRegisteredTrains = 0;
   int src, reply;
   struct TrackMessageBuf msg;
   struct SensorStates newStates;
@@ -173,8 +175,8 @@ void TrackServerInit() {
   track_node track[TRACK_MAX];
   init_tracka(track);
   for(i=0; i<TRACK_MAX; i++) {
-    track[i].edge[0].reserved = false;
-    track[i].edge[1].reserved = false;
+    track[i].edge[0].reservedTrain = -1;
+    track[i].edge[1].reservedTrain = -1;
   }
   track_edge *edge;
   track_edge *reverseEdge;
@@ -269,8 +271,8 @@ void TrackServerInit() {
 	  init_trackb(track);
 	}
   	for(i=0; i<TRACK_MAX; i++) {
-  	  track[i].edge[0].reserved = false;
-  	  track[i].edge[1].reserved = false;
+  	  ((track[i]).edge[0]).reservedTrain = -1;
+  	  ((track[i]).edge[1]).reservedTrain = -1;
   	}
 	reply = 0;
 	Reply(src, (char *)&reply, sizeof(int));
@@ -300,24 +302,45 @@ void TrackServerInit() {
 	}
 	Reply(src, (char *)&reply, sizeof(int));
 	break;
+      case TRACKRELEASEALLRESERV:
+	for(i=0; i<TRACK_MAX; i++) {
+	  if(((track[i]).edge[0]).reservedTrain == msg.data[2]) {
+	    ((track[i]).edge[0]).reservedTrain = -1;
+	  }
+	  if(((track[i]).edge[1]).reservedTrain == msg.data[2]) {
+	    ((track[i]).edge[1]).reservedTrain = -1;
+	  }
+	}
+	if(msg.data[1] == -1) {
+	  Reply(src, (char *)&reply, sizeof(int));
+	  break;
+	}
       case TRACKRESERVE:
 	edge = adjEdge(&track[msg.data[0]], &track[msg.data[1]]);
 	reverseEdge = adjEdge(track[msg.data[1]].reverse, track[msg.data[0]].reverse);
-	if(edge->reserved) {
-	  reply = false;
+	if(edge == NULL) {
+	  Reply(src, (char *)&src, sizeof(int));
+	  break;
+	}
+	if(edge->reservedTrain != -1) {
+	  reply = edge->reservedTrain;
 	}else{
-	  edge->reserved = true;
-	  reverseEdge->reserved = true;
-	  reply = true;
+	  edge->reservedTrain = msg.data[2];
+	  reverseEdge->reservedTrain = msg.data[2];
+	  reply = src;
 	}
 	Reply(src, (char *)&reply, sizeof(int));
 	break;
       case TRACKRESERVEBLOCK:
 	edge = adjEdge(&track[msg.data[0]], &track[msg.data[1]]);
 	reverseEdge = adjEdge(track[msg.data[1]].reverse, track[msg.data[0]].reverse);
-	if(!(edge->reserved)) {
-	  edge->reserved = true;
-	  reverseEdge->reserved = true;
+	if(edge == NULL) {
+	  Reply(src, (char *)&src, sizeof(int));
+	  break;
+	}
+	if(edge->reservedTrain == -1) {
+	  edge->reservedTrain = msg.data[2];
+	  reverseEdge->reservedTrain = msg.data[2];
 	  reply = true;
 	  Reply(src, (char *)&reply, sizeof(int));
 	}else{
@@ -337,15 +360,19 @@ void TrackServerInit() {
       case TRACKUNRESERVE:
 	edge = adjEdge(&track[msg.data[0]], &track[msg.data[1]]);
 	reverseEdge = adjEdge(track[msg.data[1]].reverse, track[msg.data[0]].reverse);
-	edge->reserved = false;
-	reverseEdge->reserved = false;
+	if(edge == NULL) {
+	  Reply(src, (char *)&src, sizeof(int));
+	  break;
+	}
+	edge->reservedTrain = -1;
+	reverseEdge->reservedTrain = -1;
 	Reply(src, (char *)&reply, sizeof(int));
 
 	tempReserveNode = reserveFirst;
 	while(tempReserveNode != NULL) {
 	  if(tempReserveNode->edge == edge || tempReserveNode->edge == reverseEdge) {
-	    edge->reserved = true;
-	    reverseEdge->reserved = true;
+	    edge->reservedTrain = tempReserveNode->train;
+	    reverseEdge->reservedTrain = tempReserveNode->train;
 	    reply = true;
 	    Reply(tempReserveNode->tid, (char *)&reply, sizeof(int));
 	    if(tempReserveNode->next == NULL && tempReserveNode->last == NULL) {
@@ -360,10 +387,15 @@ void TrackServerInit() {
 	      (tempReserveNode->last)->next = tempReserveNode->next;
 	      (tempReserveNode->next)->last = tempReserveNode->last;
 	    }
+	    break;
 	  }
 
 	  tempReserveNode = tempReserveNode->next;
 	}
+	break;
+      case TRACKGETNUM:
+	Reply(src, (char *)&numRegisteredTrains, sizeof(int));
+	++numRegisteredTrains;
 	break;
     }
   }
@@ -505,11 +537,12 @@ int getTrack() {
   return reply;
 }
 
-int getReservation(int node1, int node2) {
+int getReservation(int trainTid, int node1, int node2) {
   struct TrackMessage msg;
   msg.type = TRACKRESERVE;
   msg.data[0] = node1;
   msg.data[1] = node2;
+  msg.data[2] = trainTid;
   int retVal;
 
   Send(whoIs("Track Server"), (char *)&msg, sizeof(struct TrackMessage), (char *)&retVal, sizeof(int));
@@ -517,11 +550,12 @@ int getReservation(int node1, int node2) {
   return retVal;
 }
 
-int blockOnReservation(int node1, int node2) {
+int blockOnReservation(int trainTid, int node1, int node2) {
   struct TrackMessage msg;
   msg.type = TRACKRESERVEBLOCK;
   msg.data[0] = node1;
   msg.data[1] = node2;
+  msg.data[2] = trainTid;
   int retVal;
 
   Send(whoIs("Track Server"), (char *)&msg, sizeof(struct TrackMessage), (char *)&retVal, sizeof(int));
@@ -537,6 +571,27 @@ void returnReservation(int node1, int node2) {
   int retVal;
 
   Send(whoIs("Track Server"), (char *)&msg, sizeof(struct TrackMessage), (char *)&retVal, sizeof(int));
+}
+
+int getMyTrainID() {
+  struct TrackMessage msg;
+  msg.type = TRACKGETNUM;
+  int retVal;
+
+  Send(whoIs("Track Server"), (char *)&msg, sizeof(struct TrackMessage), (char *)&retVal, sizeof(int));
+
+  return retVal;
+}
+
+void releaseAllReservations(int trainTid, int node1, int node2) {
+  struct TrackMessage msg;
+  msg.type = TRACKRELEASEALLRESERV;
+  msg.data[0] = node1;
+  msg.data[1] = node2;
+  msg.data[2] = trainTid;
+  int reply;
+
+  Send(whoIs("Track Server"), (char *)&msg, sizeof(struct TrackMessage), (char *)&reply, sizeof(int));
 }
 
 void initTrack(track_node *track) {
