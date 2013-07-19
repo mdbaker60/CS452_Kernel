@@ -447,7 +447,6 @@ void trainTask() {
   struct TrainDriverMessage driverMsg;
   int nextNode = -1, nextNodeDist = 0;
   char prevSwitchState = 'S';
-  int forwardLocation, forwardDelta;
   while(true) {
     Receive(&src, (char *)&msg, sizeof(struct TrainVelocityMessage));
     switch(msg.type) {
@@ -483,16 +482,21 @@ void trainTask() {
 	}else if(track[location].type == NODE_EXIT) {
 	  nextNode = location;
 	  nextNodeDist = 0xFFFFFF;
-	  if(direction == DIR_FORWARD) {
-	    delta = -20000;
-	  }else{
-	    delta = -140000;
-	  }
+	  delta = 0;
 	}else{
 	  nextNode = getNodeIndex(track, ((track[location].edge[DIR_AHEAD]).dest));
 	  nextNodeDist = adjDistance(&track[location], &track[nextNode]);
 	}
 	if(delta >= nextNodeDist) {
+	  myNode = first;
+	  while(myNode != NULL) {
+	    if(myNode->location == location) {
+	      myNode->location = nextNode;
+	      myNode->delta -= nextNodeDist;
+	    }
+	    myNode = myNode->next;
+	  }
+
 	  delta -= nextNodeDist;
 	  location = nextNode;
 	  if(track[location].type == NODE_BRANCH) {
@@ -500,21 +504,9 @@ void trainTask() {
 	  }
 	}
 
- 	if(direction == DIR_FORWARD) {
-	  forwardLocation = distanceAfterForTrackState(track, 20000, location, delta, &forwardDelta);
-	}else{
-	  forwardLocation = distanceAfterForTrackState(track, 140000, location, delta, &forwardDelta);
-	}
-
 	myNode = first;
 	while(myNode != NULL) {
-	  int floc1, floc2;
-	  floc1 = getNodeIndex(track, track[myNode->location].edge[DIR_STRAIGHT].dest);
-	  if(track[myNode->location].type == NODE_BRANCH) {
-	    floc2 = getNodeIndex(track, track[myNode->location].edge[DIR_CURVED].dest);
-	  }else floc2 = -1;
-	  if((forwardLocation == myNode->location && forwardDelta >= myNode->delta) ||
-		floc1 == forwardLocation || floc2 == forwardLocation) {
+	  if(location == myNode->location && delta >= myNode->delta) {
 	    Reply(myNode->src, (char *)&reply, sizeof(int));
 	    if(myNode->next == NULL && myNode->last == NULL) {
 	      first = last = NULL;
@@ -535,18 +527,12 @@ void trainTask() {
 
 	++numUpdates;
 	if(numUpdates == 10) {
-	  int frontLocation, frontDelta;
-	  if(direction == DIR_FORWARD) {
-	    frontLocation = distanceAfterForTrackState(track, 20000, location, delta, &frontDelta);
-	  }else{
-	    frontLocation = distanceAfterForTrackState(track, 140000, location, delta, &frontDelta);
-	  }
 	  printColoredAt(myColor, BLACK, 8+trainID, 1,
 			 "\e[K%d -- Velocity: %dmm/s",
 			 trainNum, currentVelocity(t0, v0, v1, &accState)/10);
 	  printColoredAt(myColor, BLACK, 8+trainID, 40,
 			 "%s + %dcm",
-			 track[frontLocation].name, frontDelta/10000);
+			 track[location].name, delta/10000);
 	  numUpdates = 0;
 	}
 	break;
@@ -568,7 +554,7 @@ void trainTask() {
 	Putc2(1, (char)2, (char)trainNum);
 	location = waitOnAnySensor();
 	Putc2(1, (char)0, (char)trainNum);
-	delta = 50000;	//stop about 5cm past point of sensor
+	delta = 70000;	//stop about 7cm past point of sensor
 
 	//reserve the track at your current location
 	blockOnReservation(MyTid(), getNodeIndex(track, track[location].reverse),
@@ -592,14 +578,18 @@ void trainTask() {
 	configuring = true;
 	break;
       case TRAINSETLOCATION:
-	if(direction == DIR_FORWARD) {
-	  msg.location = distanceBeforeForTrackState(track, 20000, msg.location, 
-						     msg.delta, &msg.delta);
-	}else{
-	  msg.location = distanceBeforeForTrackState(track, 140000, msg.location, 
-						     msg.delta, &msg.delta);
-	}
+	nextNodeDist = adjDistance(&track[location], &track[msg.location]);
+	if(nextNodeDist != -1) {
+	  myNode = first;
+	  while(myNode != NULL) {
+	    if(myNode->location == location) {
+	      myNode->location = msg.location;
+	      myNode->delta -= nextNodeDist;
+	    }
 
+	    myNode = myNode->next;
+	  }
+	}
 	location = msg.location;
 	delta = msg.delta;
 	if(track[location].type == NODE_BRANCH) {
@@ -608,23 +598,13 @@ void trainTask() {
 	Reply(src, (char *)&reply, sizeof(int));
 	break;
       case TRAINWAITFORLOCATION:
-	forwardLocation = msg.location;
-	forwardDelta = msg.delta;
-	if(direction == DIR_FORWARD) {
-	  msg.location = distanceBeforeForTrackState(track, 20000, msg.location, 
-						     msg.delta, &msg.delta);
-	}else{
-	  msg.location = distanceBeforeForTrackState(track, 140000, msg.location, 
-						     msg.delta, &msg.delta);
-	}
-
 	if(location == msg.location && delta >= msg.delta) {
 	  Reply(src, (char *)&reply, sizeof(int));
 	}else{
 	  myNode = &nodes[src & 0x7F];
 	  myNode->src = src;
-	  myNode->location = forwardLocation;
-	  myNode->delta = forwardDelta;
+	  myNode->location = msg.location;
+	  myNode->delta = msg.delta;
 	  myNode->next = NULL;
 	  if(first == NULL) {
 	    first = last = myNode;
@@ -664,16 +644,8 @@ void trainTask() {
 	Reply(src, (char *)&reply, sizeof(int));
 	break;
       case TRAINGETLOCATION:
-	if(direction == DIR_FORWARD) {
-	  forwardLocation = distanceAfterForTrackState(track, 20000, location, 
-						        delta, &forwardDelta);
-	}else{
-	  forwardLocation = distanceAfterForTrackState(track, 140000, location, 
-						        delta, &forwardDelta);
-	}
-
-	msg.location = forwardLocation;
-	msg.delta = forwardDelta;
+	msg.location = location;
+	msg.delta = delta;
 	Reply(src, (char *)&msg, sizeof(struct TrainMessage));
 	break;
       case TRAINGETVELOCITY:
@@ -714,7 +686,7 @@ void trainTask() {
 	direction = (direction == DIR_FORWARD) ? DIR_BACKWARD : DIR_FORWARD;
 	location = getNodeIndex(track, track[location].reverse);
 	delta = -delta;
-	delta += PICKUPLENGTH;
+	delta += 20000+140000+PICKUPLENGTH;
 	if(track[location].type == NODE_BRANCH) {
 	  prevSwitchState = getSwitchState(track[location].num);
 	}
@@ -1212,7 +1184,6 @@ void trainDriver() {
 
   int stopNode, stopDistance, location, delta;
 
-  int forwardLocation, forwardDelta;
   int tasksComplete = 0, lastSensor = -1;
   int brokenSwitchNum[3];
   char switchState;
@@ -1298,19 +1269,17 @@ void trainDriver() {
 	  delta = getTrainLocation(trainTid, &location);
 	  int dist = distanceAlongPath(&path, &track[location], path.node[lastSensor]);
 	  int err = delta - dist;
-	  err -= (getTrainDirection(trainTid) == DIR_FORWARD) ? 20000 : 140000;
+	  if(getTrainDirection(trainTid) == DIR_FORWARD) {
+	    delta = 20000;
+	  }else{
+	    delta = 140000;
+	  }
+	  err -= delta;
 	  printColored(trainColor, BLACK, 
 		       "distance error at sensor %s is %dmm\r", 
 		       (path.node[lastSensor])->name, err/1000);
 
-	  if(getTrainDirection(trainTid) == DIR_FORWARD) {
-	    forwardLocation = distanceAfterForTrackState(track, 20000, 
-			getNodeIndex(track, path.node[lastSensor]), 0, &forwardDelta);
-	  }else{
-	    forwardLocation = distanceAfterForTrackState(track, 140000,
-			getNodeIndex(track, path.node[lastSensor]), 0, &forwardDelta);
-	  }
-	  setTrainLocation(trainTid, forwardLocation, forwardDelta);
+	  setTrainLocation(trainTid, getNodeIndex(track, path.node[lastSensor]), delta);
 	}
 
 	if(curSensor == -1 || curSensor == path.numNodes-1) {
@@ -1340,14 +1309,7 @@ void trainDriver() {
       case SWITCH0MISSED:
       case SWITCH1MISSED:
       case SWITCH2MISSED:
-	if(getTrainDirection(trainTid) == DIR_FORWARD) {
-	  forwardLocation = distanceAfterForTrackState(track, 20000, 
-		    	sensorMsg.switchMiss[messageType-SWITCH0MISSED], 0, &forwardDelta);
-	}else{
-	  forwardLocation = distanceAfterForTrackState(track, 140000,
-			sensorMsg.switchMiss[messageType-SWITCH0MISSED], 0, &forwardDelta);
-	}
-	setTrainLocation(trainTid, forwardLocation, forwardDelta);
+	setTrainLocation(trainTid, sensorMsg.switchMiss[messageType-SWITCH0MISSED], 0);
 	if(getAccState(trainTid) != DECELERATING) {
 	  setDecelerating(trainTid);
 	}
@@ -1408,6 +1370,7 @@ void trainDriver() {
 	  break;
 	}
 
+	printf("reserving track between %s and %s\r", (path.node[curReserve])->name, (path.node[curReserve+1])->name);
 	delta = stoppingDistance(getTrainMaxVelocity(trainTid))+50000;
 	delta = ((path.node[curReserve])->type == NODE_MERGE) ? delta : delta+250000;
 	pathNode = distanceBefore(&path, 
@@ -1441,14 +1404,7 @@ void trainDriver() {
       removeSensorTask(sensorTask);
     }else{
       Destroy(sensorTask);
-      if(getTrainDirection(trainTid) == DIR_FORWARD) {
-        forwardLocation = distanceAfterForTrackState(track, 20000, 
-			sensorNum, 0, &forwardDelta);
-      }else{
-        forwardLocation = distanceAfterForTrackState(track, 140000,
-			sensorNum, 0, &forwardDelta);
-      }
-      setTrainLocation(trainTid, forwardLocation, forwardDelta);
+      setTrainLocation(trainTid, sensorNum, 0);
       Receive(&src, (char *)&reply, sizeof(int));
       Destroy(timeoutTask);
     }
@@ -1480,7 +1436,6 @@ void trainConfiger() {
   track_node track[TRACK_MAX];
   initTrack(track);
 
-  int forwardLocation, forwardDelta;
   int color = getTrainColor(MyParentTid());
 
   //release the current track reservation
@@ -1506,14 +1461,7 @@ void trainConfiger() {
     sensorsPassed = 0;
     for(j=0; j<15; j++) {
       sensor = waitOnAnySensor();
-      if(getTrainDirection(MyParentTid()) == DIR_FORWARD) {
-        forwardLocation = distanceAfterForTrackState(track, 20000, 
-			sensor, 0, &forwardDelta);
-      }else{
-        forwardLocation = distanceAfterForTrackState(track, 140000,
-			sensor, 0, &forwardDelta);
-      }
-      setTrainLocation(MyParentTid(), forwardLocation, forwardDelta);
+      setTrainLocation(MyParentTid(), sensor, 0);
       time = Time();
       int distance = 1000*BFS(oldSensor, sensor, track, NULL, false);
       int newVelocity = distance/(time - oldTime);
