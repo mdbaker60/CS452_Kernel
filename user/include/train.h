@@ -88,6 +88,8 @@ int BFS(int node1, int node2, track_node *track, struct Path *path, int doRevers
 int adjDistance(track_node *src, track_node *dest);
 int adjDirection(track_node *src, track_node *dest);
 track_edge *adjEdge(track_node *src, track_node *dest);
+int distanceAfterForTrackState(track_node *track, int distance, int nodeNum, int delta, int *returnDistance);
+int distanceBeforeForTrackState(track_node *track, int distance, int nodeNum, int delta, int *returnDistance);
 int distanceAfter(struct Path *path, int distance, int nodeNum, int *returnDistance);
 int distanceBefore(struct Path *path, int distance, int nodeNum, int *returnDistance);
 

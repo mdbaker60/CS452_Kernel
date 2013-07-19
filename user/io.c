@@ -312,7 +312,7 @@ void outputEscape(char *escape) {
 }
 
 void moveCursor_unsafe(int line, int column) {
-  outputEscape_unsafe("[");
+  printString(2, "\e[");
   printInt(2, line, 10);
   Putc(2, ';');
   printInt(2, column, 10);
@@ -326,9 +326,9 @@ void moveCursor(int line, int column) {
 }
 
 void clearLine_unsafe(int line) {
-  outputEscape_unsafe("[s");
+  printString(2, "\e[s");
   moveCursor_unsafe(line, 1);
-  outputEscape_unsafe("[K[u");
+  printString(2, "\e[K\e[u");
 }
 
 void clearLine(int line) {
@@ -341,20 +341,20 @@ void printColoredAt(int fColor, int bColor, int line, int column, char *format, 
   va_list va;
 
   requestDraw();
-  outputEscape_unsafe("[");
+  printString(2, "\e[");
   printInt(2, fColor+30, 10);
   Putc(2, ';');
   printInt(2, bColor+40, 10);
   Putc(2, 'm');
 
-  outputEscape_unsafe("[s");
+  printString(2, "\e[s");
   moveCursor_unsafe(line, column);
 
   va_start(va, format);
   formatString(format, va);
   va_end(va);
-
-  outputEscape_unsafe("[u[37;40m");
+ 
+  printString(2, "\e[u\e[37;40m");
   finishedDrawing();
 }
 
@@ -362,14 +362,14 @@ void printAt(int line, int column, char *format, ...) {
   va_list va;
 
   requestDraw();
-  outputEscape_unsafe("[s");
+  printString(2, "\e[s");
   moveCursor_unsafe(line, column);
 
   va_start(va, format);
   formatString(format, va);
   va_end(va);
 
-  outputEscape_unsafe("[u");
+  printString(2, "\e[u");
   finishedDrawing();
 }
 
@@ -377,7 +377,7 @@ void printColored(int fColor, int bColor, char *format, ...) {
   va_list va;
 
   requestDraw();
-  outputEscape_unsafe("[");
+  printString(2, "\e[");
   printInt(2, fColor+30, 10);
   Putc(2, ';');
   printInt(2, bColor+40, 10);
@@ -387,7 +387,7 @@ void printColored(int fColor, int bColor, char *format, ...) {
   formatString(format, va);
   va_end(va);
 
-  outputEscape_unsafe("[37;40m");
+  printString(2, "\e[37;40m");
   finishedDrawing();
 }
 
