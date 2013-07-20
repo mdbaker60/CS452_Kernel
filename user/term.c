@@ -211,7 +211,7 @@ void moveTrainTask() {
   Destroy(MyTid());
 }
 
-void parseCommand(char *command, int *trainSpeeds, int *train) {
+void parseCommand(char *command, int *trainSpeeds, int *train, struct PRNG *prng) {
   char *argv[MAX_ARGS];
   int argc = formatArgs(command, argv);
 
@@ -309,9 +309,8 @@ void parseCommand(char *command, int *trainSpeeds, int *train) {
     }
   }else if(strcmp(argv[0], "randomizeSwitches") == 0) {
     int i;
-    seed(Time());
     for(i=1; i<19; i++) {
-      int dir = random() % 2;
+      int dir = random(prng) % 2;
       if(dir == 0) {
 	setSwitchState(i, 'S');
       }else{
@@ -319,7 +318,7 @@ void parseCommand(char *command, int *trainSpeeds, int *train) {
       }
     }
     for(i=153; i<157; i++) {
-      int dir = random() % 2;
+      int dir = random(prng) % 2;
       if(dir == 0) {
 	setSwitchState(i, 'S');
       }else{
@@ -513,11 +512,14 @@ void terminalDriver() {
 
   Create(2, clockDriver);
 
+  struct PRNG prng;
+  seed(&prng, Time());
+
   outputEscape("[2J[13;100r");
   refreshScreen();
   initializeTrack();
   moveCursor(13, 1);
-  Putc(2, '>');
+  printf(">");
   while(true) {
     c = (char)Getc(2);
     switch(c) {
@@ -525,15 +527,15 @@ void terminalDriver() {
 	curCommand[commandLength] = '\0';
 	strcpy(commands[commandNum], curCommand);
 	lengths[commandNum] = commandLength;
-	Putc(2, '\r');
-	parseCommand(curCommand, trainSpeeds, train);
+	printf("\r");
+	parseCommand(curCommand, trainSpeeds, train, &prng);
 	commandNum++;
 	commandNum %= NUM_SAVED_COMMANDS;
 	viewingNum = commandNum;
 	commands[commandNum][0] = '\0';
 	commandLength = 0;
 	if(totalCommands < NUM_SAVED_COMMANDS-1) totalCommands++;
-	Putc(2, '>');
+	printf(">");
 	break;
       case '\n':
 	//ignore newlines
@@ -584,7 +586,7 @@ void terminalDriver() {
       default:
 	if(commandLength < BUFFERSIZE - 1) {
           curCommand[commandLength++] = c;
-          Putc(2, c);
+	  printf("%c", c);
 	}
         break;
     }

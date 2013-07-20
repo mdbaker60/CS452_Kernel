@@ -283,6 +283,14 @@ void formatString(char *format, va_list va) {
   }
 }
 
+void printf_unsafe(char *format, ...) {
+  va_list va;
+
+  va_start(va, format);
+  formatString(format, va);
+  va_end(va);
+}
+
 void printf(char *format, ...) {
   va_list va;
 
@@ -343,7 +351,8 @@ void printColoredAt(int fColor, int bColor, int line, int column, char *format, 
   requestDraw();
   printString(2, "\e[");
   printInt(2, fColor+30, 10);
-  Putc(2, ';');
+  Putc(2, 'm');
+  printString(2, "\e[");
   printInt(2, bColor+40, 10);
   Putc(2, 'm');
 
@@ -353,8 +362,10 @@ void printColoredAt(int fColor, int bColor, int line, int column, char *format, 
   va_start(va, format);
   formatString(format, va);
   va_end(va);
- 
-  printString(2, "\e[u\e[37;40m");
+
+  printString(2, "\e[u");
+  printString(2, "\e[37m");
+  printString(2, "\e[40m");
   finishedDrawing();
 }
 
@@ -379,7 +390,8 @@ void printColored(int fColor, int bColor, char *format, ...) {
   requestDraw();
   printString(2, "\e[");
   printInt(2, fColor+30, 10);
-  Putc(2, ';');
+  Putc(2, 'm');
+  printString(2, "\e[");
   printInt(2, bColor+40, 10);
   Putc(2, 'm');
 
@@ -387,7 +399,8 @@ void printColored(int fColor, int bColor, char *format, ...) {
   formatString(format, va);
   va_end(va);
 
-  printString(2, "\e[37;40m");
+  printString(2, "\e[37m");
+  printString(2, "\e[40m");
   finishedDrawing();
 }
 

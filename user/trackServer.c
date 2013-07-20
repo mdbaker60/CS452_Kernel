@@ -65,17 +65,19 @@ void printSwitchTable(char *states) {
 void printSensorList(int *history, int head) {
   int i, sensor;
 
-  outputEscape("[s");
-  moveCursor(6, 1);
+  requestDraw();
+  outputEscape_unsafe("[s");
+  moveCursor_unsafe(6, 1);
 
   for(i=9; i>=0; i--) {
     sensor = history[(head+i)%10];
     if(sensor != ANYSENSOR) {
-      printf("%c%d ", (char)(sensor/16)+65, sensor%16+1);
+      printf_unsafe("%c%d ", (char)(sensor/16)+65, sensor%16+1);
     }
   }
 
-  outputEscape("[u");
+  outputEscape_unsafe("[u");
+  finishedDrawing();
 }
 
 void updateSensorInfo(struct SensorStates *oldStates, struct SensorStates *newStates, 
@@ -183,14 +185,6 @@ void TrackServerInit() {
   while(true) {
     Receive(&src, (char *)&msg, sizeof(struct TrackMessageBuf));
     switch(msg.type) {
-      case TRACKPRINTCLOCK:
-	min = msg.data[0];
-	sec = msg.data[1];
-	tenthSec = msg.data[2];
-	printAt(1, 1, "%d%d:%d%d:%d", min/10, min%10, sec/10, sec%10, tenthSec);
-	reply = 0;
-	Reply(src, (char *)&reply, sizeof(int));
-	break;
       case TRACKSETSWITCH:
 	if(msg.data[0] < 0 || msg.data[0] > 156 || (msg.data[0] > 18 && msg.data[0] < 153)) {
 	  printColored(RED, BLACK, "ERROR: train server given invalid switch number %d\r", msg.data[0]);
@@ -300,6 +294,26 @@ void TrackServerInit() {
 	  }
 	  tempNode = tempNode->next;
 	}
+
+	tempReserveNode = reserveFirst;
+	while(tempReserveNode != NULL) {
+	  if(tempReserveNode->tid == msg.tid) {
+	    if(tempReserveNode->next == NULL && tempReserveNode->last == NULL) {
+	      reserveFirst = reserveLast = NULL;
+	    }else if(tempReserveNode->next == NULL) {
+	      reserveLast = tempReserveNode->last;
+	      reserveLast->next = NULL;
+	    }else if(tempReserveNode->last == NULL) {
+	      reserveFirst = tempReserveNode->next;
+	      reserveFirst->last = NULL;
+	    }else{
+	      (tempReserveNode->last)->next = tempReserveNode->next;
+	      (tempReserveNode->next)->last = tempReserveNode->last;
+	    }
+	  }
+	  tempReserveNode = tempReserveNode->next;
+	}
+
 	Reply(src, (char *)&reply, sizeof(int));
 	break;
       case TRACKRELEASEALLRESERV:
@@ -401,7 +415,7 @@ void TrackServerInit() {
   }
 }
 
-void removeSensorTask(int taskID) {
+void removeTrackTask(int taskID) {
   struct TrackMessage msg;
   msg.type = TRACKREMOVETASK;
   msg.tid = taskID;
@@ -411,14 +425,7 @@ void removeSensorTask(int taskID) {
 }
 
 void printTime(int min, int sec, int tenthSec) {
-  struct TrackMessage msg;
-  msg.type = TRACKPRINTCLOCK;
-  msg.data[0] = min;
-  msg.data[1] = sec;
-  msg.data[2] = tenthSec;
-  int reply;
-
-  Send(whoIs("Track Server"), (char *)&msg, sizeof(struct TrackMessage), (char *)&reply, sizeof(int));
+  printAt(1, 1, "%d%d:%d%d:%d", min/10, min%10, sec/10, sec%10, tenthSec);
 }
 
 void setSwitchState(int switchNum, char state) {

@@ -6,6 +6,7 @@
 #define CSDELAY		2
 #define CSGETTIME	3
 #define CSSHUTDOWN	4
+#define CSREMOVETASK	5
 
 void CSInit();
 int Delay(int ticks);

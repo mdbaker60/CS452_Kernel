@@ -59,6 +59,6 @@ int getSensor(struct SensorStates *states, int sensorNum);
 int setSensorByte(struct SensorStates *states, int byteNum, int byte);
 void getSensorData(struct SensorStates *states);
 
-void removeSensorTask(int taskID);
+void removeTrackTask(int taskID);
 
 #endif

@@ -37,12 +37,44 @@
 #define SWITCH1MISSED		6
 #define SWITCH2MISSED		7
 #define RESERVEDONE		8
+#define RESERVETIMEOUT		9
+#define RESERVENEEDSTOP		10
 
 #define PERIODICSTOP		2
 
 #define TIMEOUTLENGTH		100000
 #define REVERSEOVERSHOOT	100000
 #define PICKUPLENGTH		48000
+
+
+struct SwitchMessage {
+  int location;
+  int delta;
+  int switchNum;
+  int direction;
+  int done;
+};
+
+struct NodeMessage {
+  int location;
+  int reverseNode;
+  int done;
+};
+
+struct SensorMessage {
+  int sensorNum;
+  int sensorMiss;
+  int switchMiss[3];
+  int done;
+};
+
+struct ReserveMessage {
+  int location;
+  int delta;
+  int node1;
+  int node2;
+  int done;
+};
 
 struct TrainDriverMessage {
   int trainNum;
@@ -83,7 +115,7 @@ typedef enum {
 char *getHomeFromTrainID(int trainID);
 
 void copyPath(struct Path *dest, struct Path *source);
-int shortestPath(int node1, int node2, track_node *track, struct Path *path, int doReverse);
+int shortestPath(int node1, int node2, track_node *track, struct Path *path, int doReverse, track_edge *badEdge);
 int BFS(int node1, int node2, track_node *track, struct Path *path, int doReverse);
 int adjDistance(track_node *src, track_node *dest);
 int adjDirection(track_node *src, track_node *dest);
@@ -96,6 +128,7 @@ int distanceBefore(struct Path *path, int distance, int nodeNum, int *returnDist
 void periodicTask();
 void delayTask();
 void sensorWaitTask();
+void reserveWaitTask();
 void stopWaitTask();
 void locationWaitTask();
 
