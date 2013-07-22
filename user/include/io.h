@@ -7,6 +7,7 @@
 
 #define DRAWSTART	0
 #define DRAWSTOP	1
+#define DRAWSHUTDOWN	2
 
 #define BLACK	0
 #define RED	1
@@ -55,5 +56,6 @@ void sendTrainCommand(int command);
 void DSInit();
 int requestDraw();
 int finishedDrawing();
+void DSShutdown();
 
 #endif

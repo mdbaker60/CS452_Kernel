@@ -17,6 +17,12 @@
 
 char *splitCommand(char *command);
 
+void CleanShutdown() {
+  DSShutdown();
+  bwprintf(COM2, "\e[1;1f\e[2J");
+  Shutdown();
+}
+
 int largestPrefix(char *str1, char *str2) {
   int i=0;
   while(str1[i] != '\0' && str1[i] == str2[i]) i++;
@@ -261,9 +267,7 @@ void parseCommand(char *command, int *trainSpeeds, int *train, struct PRNG *prng
       }
     }
   }else if(strcmp(argv[0], "q") == 0) {
-    outputEscape("[2J");
-    moveCursor(1,1);
-    Shutdown();
+    CleanShutdown();
   }else if(strcmp(argv[0], "selectTrack") == 0) {
     if(numArgs(argc, argv) != 1) {
       printColored(RED, BLACK, "Usage: selectTrack track_name\r");

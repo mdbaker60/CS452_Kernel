@@ -148,4 +148,4 @@ __writebyte__:
 	mov	pc, lr
 __memcopy_done__:
 	ldmfd	sp, {r0, r3 - r11, sp, pc}
-	.size	memcpy, .-memcpp
+	.size	memcpy, .-memcpy

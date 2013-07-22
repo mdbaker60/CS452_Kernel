@@ -27,6 +27,7 @@
 #define TRACKUNRESERVE		13
 #define TRACKGETNUM		14
 #define TRACKRELEASEALLRESERV	15
+#define TRACKPRINTRES		16
 
 struct SensorStates {
   int stateInfo[3];
@@ -47,6 +48,7 @@ void setTrack(int track);
 int getTrack();
 int getMyTrainID();
 void releaseAllReservations(int trainTid, int node1, int node2);
+void printReservedTracks(int trainTid);
 
 int getReservation(int trainTid, int node1, int node2);
 int blockOnReservation(int trainTid, int node1, int node2);

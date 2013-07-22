@@ -20,6 +20,7 @@ void bufferedNotifier(){
     Send(server, (char *)&msg, sizeof(struct NotifierMessageBuf), (char *)&reply, sizeof(int));
   }
 }
+
 void notifier() {
   int server, eventType, reply = 0;
   struct NotifierMessage msg;

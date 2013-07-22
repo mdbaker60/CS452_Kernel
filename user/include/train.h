@@ -27,6 +27,7 @@
 #define TRAINCONFIGDONE		20
 #define TRAINSETSPEED		21
 #define TRAINGETID		22
+#define TRAINGETNUM		23
 
 #define CHECKSTOP		0
 #define SWITCHDONE		1
@@ -39,6 +40,7 @@
 #define RESERVEDONE		8
 #define RESERVETIMEOUT		9
 #define RESERVENEEDSTOP		10
+#define UNRESERVEDONE		11
 
 #define PERIODICSTOP		2
 
@@ -69,6 +71,14 @@ struct SensorMessage {
 };
 
 struct ReserveMessage {
+  int location;
+  int delta;
+  int node1;
+  int node2;
+  int done;
+};
+
+struct UnreserveMessage {
   int location;
   int delta;
   int node1;
@@ -149,6 +159,7 @@ void setTrainColor(int trainTid, int color);
 int getTrainColor(int trainTid);
 void setTrainSpeed(int trainTid, int speed);
 int getTrainID(int trainTid);
+int getTrainNum(int trainTid);
 
 void trainGoHome(int trainTid);
 
@@ -158,6 +169,7 @@ int getNextStop(struct Path *path, int curNode);
 int getNextSwitch(struct Path *path, int curNode);
 int getNextSensor(struct Path *path, int curNode);
 void getAllBranchMissSensors(struct Path *path, int curNode, int *sensors, int *switches);
+int getNextNodeForTrackState(track_node *track, int location);
 int getNextSensorForTrackState(track_node *track);
 int distanceAlongPath(struct Path *path, track_node *node1, track_node *node2);
 
@@ -165,6 +177,7 @@ void switchWatcher();
 void nodeWatcher();
 void sensorWatcher();
 void reserveWatcher();
+void unreserveWatcher();
 void trainDriver();
 
 void trainConfiger();

@@ -5,8 +5,9 @@
 #include <nameServer.h>
 #include <values.h>
 #include <ts7200.h>
+#include <assert.h>
 
-#define BUFFERSIZE 128
+#define BUFFERSIZE 4096
 
 struct IONode {
   int tid;
@@ -122,6 +123,7 @@ int handleNewOutputTask(int *buffer, int *bufHead, int *bufTail, int *available,
     *UARTData = input & 0xFF;
     retVal = true;
   }else{
+    assert((*bufHead+1)%BUFFERSIZE != *bufTail, "Output buffer overflowed\r");
     buffer[(*bufHead)++] = input & 0xFF;
     *bufHead %= BUFFERSIZE;
   }
@@ -349,6 +351,7 @@ void printColoredAt(int fColor, int bColor, int line, int column, char *format, 
   va_list va;
 
   requestDraw();
+  printString(2, "\e[s");
   printString(2, "\e[");
   printInt(2, fColor+30, 10);
   Putc(2, 'm');
@@ -356,17 +359,16 @@ void printColoredAt(int fColor, int bColor, int line, int column, char *format, 
   printInt(2, bColor+40, 10);
   Putc(2, 'm');
 
-  printString(2, "\e[s");
   moveCursor_unsafe(line, column);
 
   va_start(va, format);
   formatString(format, va);
   va_end(va);
 
-  printString(2, "\e[u");
   printString(2, "\e[37m");
   printString(2, "\e[40m");
   printString(2, "\e[0m");
+  printString(2, "\e[u");
   finishedDrawing();
 }
 
@@ -421,11 +423,13 @@ struct DrawNode {
   struct DrawNode *next;
 };
 
-void waitForStopMessage(struct DrawNode **first, struct DrawNode **last, struct DrawNode *nodes) {
+void waitForStopMessage(struct DrawNode **first, struct DrawNode **last, struct DrawNode *nodes, int *shuttingDown) {
   int src, reply, messageType;
   do{
     Receive(&src, (char *)&messageType, sizeof(int));
-    if(messageType == DRAWSTOP) {
+    if(messageType == DRAWSHUTDOWN) {
+      *shuttingDown = src;
+    }else if(messageType == DRAWSTOP) {
       reply = 0;
       Reply(src, (char *)&reply, sizeof(int));
     }else{
@@ -449,22 +453,31 @@ void DSInit() {
 
   int src, reply, messageType;
 
+  int shuttingDown = false;
+
   RegisterAs("Draw Server");
 
   while(true) {
     if(first == NULL) {
+      if(shuttingDown != false) {
+	Reply(shuttingDown, (char *)&reply, sizeof(int));
+	Destroy(MyTid());
+      }
       Receive(&src, (char *)&messageType, sizeof(int));
       if(messageType == DRAWSTART) {
         reply = 0;
 	Reply(src, (char *)&reply, sizeof(int));
-	waitForStopMessage(&first, &last, nodes);
+	waitForStopMessage(&first, &last, nodes, &shuttingDown);
+      }else if(messageType == DRAWSHUTDOWN) {
+	Reply(src, (char *)&reply, sizeof(int));
+	Destroy(MyTid());
       }
     }else{	//first != NULL
       src = first->src;
       first = first->next;
       reply =0;
       Reply(src, (char *)&reply, sizeof(int));
-      waitForStopMessage(&first, &last, nodes);
+      waitForStopMessage(&first, &last, nodes, &shuttingDown);
     }
   }
 }
@@ -483,4 +496,9 @@ int finishedDrawing() {
   int messageType = DRAWSTOP, reply;
   Send(whoIs("Draw Server"), (char *)&messageType, sizeof(int), (char *)&reply, sizeof(int));
   return 0;
+}
+
+void DSShutdown() {
+  int messageType = DRAWSHUTDOWN, reply;
+  Send(whoIs("Draw Server"), (char *)&messageType, sizeof(int), (char *)&reply, sizeof(int));
 }

@@ -411,6 +411,18 @@ void TrackServerInit() {
 	Reply(src, (char *)&numRegisteredTrains, sizeof(int));
 	++numRegisteredTrains;
 	break;
+      case TRACKPRINTRES:
+	for(i=0; i<TRACK_MAX; i++) {
+	  if(track[i].edge[0].reservedTrain == msg.data[0]) {
+	    printf("%s -- %s\r", (track[i].edge[0].src)->name, (track[i].edge[0].dest)->name);
+	  }
+	  if(track[i].edge[1].reservedTrain == msg.data[0]) {
+	    printf("%s -- %s\r", (track[i].edge[1].src)->name, (track[i].edge[1].dest)->name);
+	  }
+	}
+
+	Reply(src, (char *)&reply, sizeof(int));
+	break;
     }
   }
 }
@@ -596,6 +608,15 @@ void releaseAllReservations(int trainTid, int node1, int node2) {
   msg.data[0] = node1;
   msg.data[1] = node2;
   msg.data[2] = trainTid;
+  int reply;
+
+  Send(whoIs("Track Server"), (char *)&msg, sizeof(struct TrackMessage), (char *)&reply, sizeof(int));
+}
+
+void printReservedTracks(int trainTid) {
+  struct TrackMessage msg;
+  msg.type = TRACKPRINTRES;
+  msg.data[0] = trainTid;
   int reply;
 
   Send(whoIs("Track Server"), (char *)&msg, sizeof(struct TrackMessage), (char *)&reply, sizeof(int));
