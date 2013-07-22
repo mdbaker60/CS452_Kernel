@@ -366,6 +366,7 @@ void printColoredAt(int fColor, int bColor, int line, int column, char *format, 
   printString(2, "\e[u");
   printString(2, "\e[37m");
   printString(2, "\e[40m");
+  printString(2, "\e[0m");
   finishedDrawing();
 }
 
@@ -401,6 +402,7 @@ void printColored(int fColor, int bColor, char *format, ...) {
 
   printString(2, "\e[37m");
   printString(2, "\e[40m");
+  printString(2, "\e[0m");
   finishedDrawing();
 }
 

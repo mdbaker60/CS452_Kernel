@@ -1255,14 +1255,16 @@ void trainDriver() {
 	  }
 	  stopNode = distanceBefore(&path, stopLength, curStop, &stopDistance);
 	}else{
-	  stopNode += ((path.node[reserveStopLocation])->type == NODE_MERGE) ? 400000 : 50000;
+	  stopNode += ((path.node[reserveStopLocation])->type == NODE_MERGE) ? 450000 : 100000;
 	  stopNode = distanceBefore(&path, stopLength, reserveStopLocation, &stopDistance);
 	}
 	delta = getTrainLocation(trainTid, &location);
 	if((location == getNodeIndex(track, path.node[stopNode]) && delta >= stopDistance) ||
 	   location == getNodeIndex(track, path.node[stopNode+1])) {
 	  setDecelerating(trainTid);
-	  curStop = getNextStop(&path, curStop);
+	  if(reserveStopLocation == -1) {
+	    curStop = getNextStop(&path, curStop);
+	  }
 	  reserveStopLocation = -1;
 	}
 	break;
@@ -1415,6 +1417,7 @@ void trainDriver() {
 	firstSensor = curSensor;
   	tasksComplete = 0;
 	lastSensor = -1;
+	reserveStopLocation = -1;
 
 	setAccelerating(trainTid);
 	break;
@@ -1441,8 +1444,8 @@ void trainDriver() {
       case RESERVETIMEOUT:
 	printColored(color, BLACK, "reservation timed out\r");
 	//Destroy all helper tasks;
-	sensorMsg.done = true;
-	Reply(src, (char *)&sensorMsg, sizeof(struct SensorMessage));
+	Destroy(sensorer);
+	removeTrackTask(sensorer);
 	Destroy(noder);
 	removeTrainTask(trainTid, noder);
 	Destroy(switcher);
@@ -1454,7 +1457,6 @@ void trainDriver() {
 	printColored(color, BLACK, "calculating new path not passing through the edge between nodes %s and %s\r", track[reserveMsg.node1].name, track[reserveMsg.node2].name);
 	track_edge *badEdge = adjEdge(&track[reserveMsg.node1], &track[reserveMsg.node2]);
 	delta = getTrainLocation(trainTid, &location);
-	printColored(color, BLACK, "current location is %s + %dmm\r", track[location].name, delta/1000);
 	forwardDistance = shortestPath(location, msg.dest, track, &path, msg.doReverse, badEdge);
  
 	if(msg.doReverse == false) {	
@@ -1468,16 +1470,12 @@ void trainDriver() {
 	    copyPath(&path, &reversePath);
 	    reverseTrain(MyParentTid());
 	  }
+	  printf("forward distance is %d, reverse distance is %d\r", forwardDistance, reverseDistance);
 	}
 
   	if((path.node[path.numNodes-2])->reverse == path.node[path.numNodes-1]) {
   	  path.numNodes--;
   	}
-	int n;
-	printColored(color, BLACK, "%s", (path.node[0])->name);
-	for(n=1; n<path.numNodes; n++) {
-	  printColored(color, BLACK, " -> %s", (path.node[n])->name);
-	}
 
 	//Create new helper tasks
         noder = Create(2, nodeWatcher);
@@ -1499,8 +1497,10 @@ void trainDriver() {
 	firstSensor = curSensor;
   	tasksComplete = 0;
 	lastSensor = -1;
+	reserveStopLocation = -1;
 
 	setAccelerating(trainTid);
+	releaseAllReservations(trainTid, -1, -1);
 	break;
       case RESERVENEEDSTOP:
 	Reply(src, (char *)&reply, sizeof(int));
