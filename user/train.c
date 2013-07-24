@@ -28,6 +28,25 @@ char *getHomeFromTrainID(int trainID) {
   }
 }
 
+int getColorFromTrainID(int trainID) {
+  switch(trainID) {
+    case 0:
+      return CYAN;
+    case 1:
+      return GREEN;
+    case 2:
+      return MAGENTA;
+    case 3:
+      return YELLOW;
+    case 4:
+      return BLUE;
+    case 5:
+      return WHITE;
+    default:
+      return WHITE;
+  }
+}
+
 void copyPath(struct Path *dest, struct Path *source) {
   int i=0;
   dest->numNodes = source->numNodes;
@@ -477,7 +496,7 @@ void trainTask() {
 
   int location = -1, delta = 0;
 
-  int myColor = WHITE;
+  int myColor = getColorFromTrainID(trainID);
 
   Create(3, periodicTask);
 
@@ -1235,7 +1254,7 @@ void reserveWatcher() {
 	message = RESERVEDONE;
 	Destroy(reserveTask);
 	Destroy(waitTask);
-	Delay(400);
+	Delay(100);
         setAccelerating(trainTid);
       }else{
         message = RESERVETIMEOUT;
@@ -1467,6 +1486,7 @@ void trainDriver() {
 	//Calculate new path
 	delta = getTrainLocation(trainTid, &location);
 	forwardDistance = shortestPath(location, msg.dest, track, &path, msg.doReverse, NULL);
+	rearReserve = getNodeIndex(track, (path.node[curReserve])->reverse);
  
 	if(msg.doReverse == false) {	
 	  int reverseStart = getNodeIndex(track, track[location].reverse);
@@ -1478,6 +1498,15 @@ void trainDriver() {
 	  if(reverseDistance < forwardDistance) {
 	    copyPath(&path, &reversePath);
 	    reverseTrain(MyParentTid());
+
+	    delta = getTrainLocation(trainTid, &location);
+	    curUnreserveLocation = distanceBeforeForTrackState(track, 20000+140000+PICKUPLENGTH,
+						location, delta, &reply);
+	    printf("releasing track starting at %s\r", track[rearReserve].name);
+	    while(rearReserve != curUnreserveLocation) {
+	      returnReservation(rearReserve, getNextNodeForTrackState(track, rearReserve));
+	      rearReserve = getNextNodeForTrackState(track, rearReserve);
+	    }
 	  }
 	}
 
@@ -1547,29 +1576,30 @@ void trainDriver() {
 	track_edge *badEdge = adjEdge(&track[reserveMsg.node1], &track[reserveMsg.node2]);
 	delta = getTrainLocation(trainTid, &location);
 	forwardDistance = shortestPath(location, msg.dest, track, &path, msg.doReverse, badEdge);
-	rearReserve = getNodeIndex(track, path.node[curUnreserve]);
-	if(curUnreserveLocation != -1) {
-	  rearReserve = curUnreserveLocation;
-	}
+	rearReserve = getNodeIndex(track, (path.node[curReserve])->reverse);
  
 	if(msg.doReverse == false) {	
-	  int reverseStart = getNodeIndex(track, track[location].reverse);
+	  int reverseStart = getNextNodeForTrackState(track, location);
 	  int reverseSource, reverseDelta;
+	  reverseStart = getNodeIndex(track, track[reverseStart].reverse);
+	  reverseDelta = adjDistance(&track[reverseStart], track[location].reverse) - delta;
 	  reverseSource = distanceAfterForTrackState(track, 140000+20000+PICKUPLENGTH, 
-					reverseStart, 0, &reverseDelta);
+					reverseStart, reverseDelta, &reverseDelta);
+	  printf("finding reverse path starting at %s + %dcm\r", track[reverseSource].name, reverseDelta/10000);
 	  int reverseDistance = shortestPath(reverseSource, msg.dest, track, 
 					&reversePath, msg.doReverse, badEdge);
 	  if(reverseDistance < forwardDistance) {
 	    copyPath(&path, &reversePath);
 	    reverseTrain(MyParentTid());
-	  }
 
-	  delta = getTrainLocation(trainTid, &location);
-	  curUnreserveLocation = distanceBeforeForTrackState(track, 20000+140000+PICKUPLENGTH,
+	    delta = getTrainLocation(trainTid, &location);
+	    curUnreserveLocation = distanceBeforeForTrackState(track, 20000+140000+PICKUPLENGTH,
 						location, delta, &reply);
-	  while(rearReserve != curUnreserveLocation) {
-	    returnReservation(rearReserve, getNextNodeForTrackState(track, rearReserve));
-	    rearReserve = getNextNodeForTrackState(track, rearReserve);
+	    printf("releasing track starting at %s\r", track[rearReserve].name);
+	    while(rearReserve != curUnreserveLocation) {
+	      returnReservation(rearReserve, getNextNodeForTrackState(track, rearReserve));
+	      rearReserve = getNextNodeForTrackState(track, rearReserve);
+	    }
 	  }
 	}
 

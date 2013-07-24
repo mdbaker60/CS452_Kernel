@@ -123,6 +123,7 @@ typedef enum {
 } train_direction;
 
 char *getHomeFromTrainID(int trainID);
+int getColorFromTrainID(int trainID);
 
 void copyPath(struct Path *dest, struct Path *source);
 int shortestPath(int node1, int node2, track_node *track, struct Path *path, int doReverse, track_edge *badEdge);

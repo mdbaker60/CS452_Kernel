@@ -30,7 +30,7 @@ int largestPrefix(char *str1, char *str2) {
 }
 
 int tabComplete(char *command) {
-  char *commands[NUMCOMMANDS] = {"q", "tr", "rv", "sw", "selectTrack", "move", "randomizeSwitches", "init", "clear", "configureVelocities", "addTrain", "setTrainColor"};
+  char *commands[NUMCOMMANDS] = {"q", "tr", "rv", "sw", "selectTrack", "move", "randomizeSwitches", "init", "clear", "configureVelocities", "addTrain", "changeTrainColor"};
 
   int length = strlen(command);
   char *arg1 = splitCommand(command);
@@ -449,9 +449,9 @@ void parseCommand(char *command, int *trainSpeeds, int *train, struct PRNG *prng
 	Send(train[trainNum], (char *)&trainNum, sizeof(int), (char *)&reply, sizeof(int));
       }
     }
-  }else if(strcmp(argv[0], "setTrainColor") == 0) {
+  }else if(strcmp(argv[0], "changeTrainColor") == 0) {
     if(numArgs(argc, argv) != 2) {
-      printColored(RED, BLACK, "Usage: setTrainColor train_number train_color\r");
+      printColored(RED, BLACK, "Usage: changeTrainColor train_number train_color\r");
     }else{
       int trainNum = strToInt(getArgument(argc, argv, 0));
       if(train[trainNum] == -1) {
@@ -474,6 +474,7 @@ void parseCommand(char *command, int *trainSpeeds, int *train, struct PRNG *prng
       }else{
 	printf("'%s' is not a valid color. valid colors are ", getArgument(argc, argv, 1));
 	printColored(GREEN, BLACK, "green, ");
+	printColored(YELLOW, BLACK, "yellow, ");
 	printColored(BLUE, BLACK, "blue, ");
 	printColored(MAGENTA, BLACK, "magenta, ");
 	printColored(CYAN, BLACK, "cyan, ");
