@@ -1252,6 +1252,7 @@ void reserveWatcher() {
     }
     location = reserveInfo.location;
     delta = reserveInfo.delta;
+    printf("reserving track between nodes %d and %d\r", reserveInfo.node1, reserveInfo.node2);
     int gotReservation = getReservation(trainTid, reserveInfo.node1, reserveInfo.node2);
     if(gotReservation != MyTid()) {
       message = RESERVENEEDSTOP;
@@ -1342,6 +1343,9 @@ void trainDriver() {
   int curUnreserveLocation = distanceBeforeForTrackState(track, 20000+140000+PICKUPLENGTH,
 						location, delta, &delta);
   int firstNode = curNode, firstSensor = curSensor;
+
+  int curReverseReserve = -1, reverseReserveDist = 0;
+
   struct SwitchMessage switchMsg;
   struct NodeMessage nodeMsg;
   struct SensorMessage sensorMsg;
@@ -1578,15 +1582,38 @@ void trainDriver() {
 	  break;
 	}
 
-	pathNode = distanceBefore(&path, 
+	if(curReverseReserve != -1) {
+	  pathNode = distanceBefore(&path, 
+				  stoppingDistance(getTrainMaxVelocity(trainTid)),
+				  curReserve-1, &reserveMsg.delta);
+	  reserveMsg.location = getNodeIndex(track, path.node[pathNode]);
+	  reserveMsg.node1 = curReverseReserve;
+	  curReverseReserve = getNextNodeForTrackState(track, curReverseReserve);
+	  reserveMsg.node2 = curReverseReserve;
+	  reverseReserveDist += adjDistance(&track[reserveMsg.node1], &track[reserveMsg.node2]);
+	  if(reverseReserveDist >= 20000+140000+PICKUPLENGTH+REVERSEOVERSHOOT) {
+	    curReverseReserve = -1;
+	  }
+	  printColored(trainColor, BLACK, "reserving edge between %s and %s for reverse\r", track[reserveMsg.node1].name, track[reserveMsg.node2].name);
+	  reserveMsg.done = false;
+	  Reply(src, (char *)&reserveMsg, sizeof(struct ReserveMessage));
+	}else{
+	  pathNode = distanceBefore(&path, 
 				  stoppingDistance(getTrainMaxVelocity(trainTid)),
 				  curReserve, &reserveMsg.delta);
-	reserveMsg.location = getNodeIndex(track, path.node[pathNode]);
-	reserveMsg.node1 = getNodeIndex(track, path.node[curReserve]);
-	reserveMsg.node2 = getNodeIndex(track, path.node[curReserve+1]);
-	reserveMsg.done = false;
-	Reply(src, (char *)&reserveMsg, sizeof(struct ReserveMessage));
-	curReserve++;
+	  reserveMsg.location = getNodeIndex(track, path.node[pathNode]);
+	  reserveMsg.node1 = getNodeIndex(track, path.node[curReserve]);
+	  reserveMsg.node2 = getNodeIndex(track, path.node[curReserve+1]);
+	  reserveMsg.done = false;
+	  Reply(src, (char *)&reserveMsg, sizeof(struct ReserveMessage));
+	  curReserve++;
+
+	  if((path.node[curReserve])->reverse == path.node[curReserve+1]) {
+	    curReverseReserve = getNodeIndex(track, path.node[curReserve]);
+	    reverseReserveDist = 0;
+	    curReserve++;
+	  }
+	}
 	break;
       case RESERVETIMEOUT:
 	//Destroy all helper tasks;
