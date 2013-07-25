@@ -172,7 +172,9 @@ int getNextSensor(struct Path *path, int curNode);
 void getAllBranchMissSensors(struct Path *path, int curNode, int *sensors, int *switches);
 int getNextNodeForTrackState(track_node *track, int location);
 int getNextSensorForTrackState(track_node *track);
+int getNextMergeForTrackState(track_node *track, int *distance);
 int distanceAlongPath(struct Path *path, track_node *node1, track_node *node2);
+int distanceForTrackState(track_node *track, track_node *node1, track_node *node2);
 
 void switchWatcher();
 void nodeWatcher();

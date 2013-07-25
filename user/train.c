@@ -1426,6 +1426,25 @@ void trainDriver() {
 	nodeMsg.location = getNodeIndex(track, path.node[curNode]);
 	if((path.node[curNode-1])->reverse == path.node[curNode]) {
 	  nodeMsg.reverseNode = true;
+
+	  track_node *curReverseNode = path.node[curNode-1];
+	  track_node *nextReverseNode = &track[getNextNodeForTrackState(track, 
+				getNodeIndex(track, curReverseNode))];
+	  int distance = adjDistance(curReverseNode, nextReverseNode);
+	  while(distance <= 20000+140000+PICKUPLENGTH+REVERSEOVERSHOOT) {
+	    if(nextReverseNode->type == NODE_MERGE) {
+	      if(adjDirection(nextReverseNode->reverse, curReverseNode->reverse) == DIR_STRAIGHT) {
+		setSwitchState(nextReverseNode->num, 'S');
+	      }else{
+		setSwitchState(nextReverseNode->num, 'C');
+	      }
+	    }
+
+	    curReverseNode = nextReverseNode;
+	    nextReverseNode = &track[getNextNodeForTrackState(track, 
+				getNodeIndex(track, curReverseNode))];
+	    distance = adjDistance(curReverseNode, nextReverseNode);
+	  }
 	}else{
 	  nodeMsg.reverseNode = false;
 	}
