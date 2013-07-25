@@ -70,8 +70,8 @@ int shortestPath(int node1, int node2, track_node *track, struct Path *path, int
   start->searchDistance = 0;
   (start->path).numNodes = 1;
   (start->path).node[0] = start;
+  start->discovered = true;
   if(start->type == NODE_BRANCH) {
-    start->discovered = true;
     char dir = getSwitchState(start->num);
     track_node *nextNode;
     if(dir == 'S') {
@@ -79,6 +79,14 @@ int shortestPath(int node1, int node2, track_node *track, struct Path *path, int
     }else{
       nextNode = (start->edge)[DIR_CURVED].dest;
     }
+    if(badEdge != adjEdge(start, nextNode)) {
+      (nextNode->path).numNodes = 2;
+      (nextNode->path).node[0] = start;
+      (nextNode->path).node[1] = nextNode;
+      nextNode->searchDistance = adjDistance(start, nextNode);
+    }
+  }else if(start->type != NODE_EXIT) {
+    track_node *nextNode = (start->edge)[DIR_AHEAD].dest;
     if(badEdge != adjEdge(start, nextNode)) {
       (nextNode->path).numNodes = 2;
       (nextNode->path).node[0] = start;
@@ -260,6 +268,10 @@ int distanceAfterForTrackState(track_node *track, int distance, int nodeNum, int
   track_node *node = &track[nodeNum];
   track_node *nextNode;
 
+  if(distance < 0) {
+    return distanceBeforeForTrackState(track, -distance, nodeNum, delta, returnDistance);
+  }
+
   distance += delta;
 
   while(true) {
@@ -293,6 +305,10 @@ int distanceBeforeForTrackState(track_node *track, int distance, int nodeNum, in
   int diff;
   track_node *node = &track[nodeNum];
   track_node *nextNode;
+
+  if(distance < 0) {
+    return distanceAfterForTrackState(track, -distance, nodeNum, delta, returnDistance);
+  }
 
   if(distance <= delta) {
     *returnDistance = delta - distance;
@@ -506,7 +522,7 @@ void trainTask() {
   int termWaiting = -1, configuring = false, configWaiting = -1;
   int numSensorsMissed = 0;
 
-  int driver, curVelocity, v1;
+  int driver, curVelocity;
   struct TrainNode *myNode;
   struct TrainDriverMessage driverMsg;
   int nextNode = -1, nextNodeDist = 0;
@@ -528,8 +544,7 @@ void trainTask() {
 	  delta += offset;
 	}
 
-	v1 = (curSpeed == 0) ? 0 : velocity[curSpeed];
-	if(currentVelocity(t0, v0, v1, &accState) == 0) {
+	if(currentVelocity(t0, v0, velocity[curSpeed], &accState) == 0) {
 	  for(i=0; i<stopHead; i++) {
 	    Reply(stopBuffer[i], (char *)&reply, sizeof(int));
 	  }
@@ -601,7 +616,7 @@ void trainTask() {
 	if(numUpdates == 10) {
 	  printColoredAt(myColor, BLACK, 8+trainID, 1,
 			 "\e[K%d -- Velocity: %dmm/s",
-			 trainNum, currentVelocity(t0, v0, v1, &accState)/10);
+			 trainNum, currentVelocity(t0, v0, velocity[curSpeed], &accState)/10);
 	  printColoredAt(myColor, BLACK, 8+trainID, 40,
 			 "%s + %dcm",
 			 track[location].name, delta/10000);
@@ -695,8 +710,7 @@ void trainTask() {
 	}
 	break;
       case TRAINWAITFORSTOP:
-	v1 = (curSpeed == 0) ? 0 : velocity[curSpeed];
-	if(currentVelocity(t0, v0, v1, &accState) > 0) {
+	if(currentVelocity(t0, v0, velocity[curSpeed], &accState) > 0) {
 	  stopBuffer[stopHead++] = src;
 	  stopHead %= 100;
 	}else{	
@@ -763,14 +777,17 @@ void trainTask() {
 	Reply(src, (char *)&reply, sizeof(int));
 	Putc2(1, (char)15, (char)trainNum);
 	direction = (direction == DIR_FORWARD) ? DIR_BACKWARD : DIR_FORWARD;
-	curLocation = getNextNodeForTrackState(track, location);
-	curLocation = getNodeIndex(track, track[curLocation].reverse);
-	delta = adjDistance(&track[curLocation], track[location].reverse) - delta;
-	location = distanceAfterForTrackState(track, 20000+140000+PICKUPLENGTH,
-					curLocation, delta, &delta);
+	//curLocation = getNextNodeForTrackState(track, location);
+	curLocation = getNodeIndex(track, track[location].reverse);
+	//delta = adjDistance(&track[curLocation], track[location].reverse) - delta;
+	location = distanceBeforeForTrackState(track, delta-20000-140000-PICKUPLENGTH,
+					curLocation, 0, &delta);
+	/*location = distanceAfterForTrackState(track, 20000+140000+PICKUPLENGTH,
+					curLocation, delta, &delta);*/
 	if(track[location].type == NODE_BRANCH) {
 	  prevSwitchState = getSwitchState(track[location].num);
 	}
+	numSensorsMissed = 0;
 	break;
       case TRAINGETDIR:
 	Reply(src, (char *)&direction, sizeof(train_direction));
@@ -785,7 +802,7 @@ void trainTask() {
       case TRAINDRIVERDONE:
 	if(configuring) {
 	  driverMsg.trainNum = trainNum;
-	  for(i=0; i<15; i++) {
+	  for(i=8; i<15; i++) {
 	    driverMsg.velocity[i] = velocity[i];
 	  }
 	  int configer = Create(2, trainConfiger);
@@ -798,7 +815,7 @@ void trainTask() {
 	Reply(src, (char *)&reply, sizeof(int));
 	break;
       case TRAINCONFIGDONE:
-	for(i=0; i<15; i++) {
+	for(i=8; i<15; i++) {
 	  velocity[i] = msg.velocity[i];
 	}
 
@@ -1285,21 +1302,17 @@ void trainDriver() {
   struct Path reversePath;
   int forwardDistance = shortestPath(msg.source, msg.dest, track, &path, msg.doReverse, NULL);
  
-  if(msg.doReverse == false) {
-    int reverseStart = getNodeIndex(track, track[msg.source].reverse);
-    int reverseSource, reverseDelta;
-    reverseSource = distanceAfterForTrackState(track, 140000+20000+PICKUPLENGTH, 
+  int reverseStart = getNodeIndex(track, track[msg.source].reverse);
+  int reverseSource, reverseDelta;
+  reverseSource = distanceAfterForTrackState(track, 140000+20000+PICKUPLENGTH, 
 					reverseStart, 0, &reverseDelta);
-    int reverseDistance = shortestPath(reverseSource, msg.dest, track, &reversePath, msg.doReverse, NULL);
-    if(reverseDistance < forwardDistance) {
-      copyPath(&path, &reversePath);
-      int location;
-      int delta = getTrainLocation(MyParentTid(), &location);
-      printf("before reverse at %s + %dcm\r", track[location].name, delta/10000);
-      reverseTrain(MyParentTid());
-      delta = getTrainLocation(MyParentTid(), &location);
-      printf("after reverse at %s + %dcm\r", track[location].name, delta/10000);
-    }
+  int reverseDistance = shortestPath(reverseSource, msg.dest, track, &reversePath, msg.doReverse, NULL);
+  if(reverseDistance < forwardDistance) {
+    copyPath(&path, &reversePath);
+    int location;
+    int delta = getTrainLocation(MyParentTid(), &location);
+    reverseTrain(MyParentTid());
+    delta = getTrainLocation(MyParentTid(), &location);
   }
 
   //initailize workers
@@ -1389,6 +1402,11 @@ void trainDriver() {
 	switchDistance = getTrainMaxVelocity(trainTid)*30;
 	pathNode = distanceBefore(&path, switchDistance, curSwitch, &switchMsg.delta);
 	switchMsg.location = getNodeIndex(track, path.node[pathNode]);
+	if(switchMsg.delta < 0) {
+	  switchMsg.location = distanceBeforeForTrackState(track, -switchMsg.delta, 
+				switchMsg.location, 0, &switchMsg.delta);
+	}
+	printColored(trainColor, BLACK, "switching %s at %s + %dcm\r", (path.node[curSwitch])->name, track[switchMsg.location].name, switchMsg.delta/10000);
 	switchMsg.switchNum = (path.node[curSwitch])->num;
 	if((path.node[curSwitch])->type == NODE_BRANCH) {
 	  switchMsg.direction = adjDirection(path.node[curSwitch], path.node[curSwitch+1]);
@@ -1401,7 +1419,7 @@ void trainDriver() {
 	curSwitch = getNextSwitch(&path, curSwitch);
 	break;
       case NODEDONE:
-	if(curNode == path.numNodes-1 || curStop == -1) {
+	if(curNode == path.numNodes-1) {
 	  break;
 	}
 
@@ -1437,7 +1455,7 @@ void trainDriver() {
 	  setTrainLocation(trainTid, getNodeIndex(track, path.node[lastSensor]), delta);
 	}
 
-	if(curSensor == -1 || curSensor == path.numNodes-1) {
+	if(curSensor == -1) {
 	  break;
 	}
 
@@ -1470,6 +1488,11 @@ void trainDriver() {
 	switchState = (switchState == 'S') ? 'C' : 'S';
 	setSwitchState(brokenSwitchNum[messageType-SWITCH0MISSED], switchState);
 	waitForStop(trainTid);
+ 
+	//fix broken reservations
+	delta = getTrainLocation(trainTid, &location);
+	releaseAllReservations(trainTid, -1, -1);
+	//TODO may want to reserve location under you here
 
 	//Destroy all helper tasks;
 	sensorMsg.done = true;
@@ -1484,30 +1507,17 @@ void trainDriver() {
 	removeTrainTask(trainTid, unreserver);
 
 	//Calculate new path
-	delta = getTrainLocation(trainTid, &location);
 	forwardDistance = shortestPath(location, msg.dest, track, &path, msg.doReverse, NULL);
-	rearReserve = getNodeIndex(track, (path.node[curReserve])->reverse);
  
-	if(msg.doReverse == false) {	
-	  int reverseStart = getNodeIndex(track, track[location].reverse);
-	  int reverseSource, reverseDelta;
-	  reverseSource = distanceAfterForTrackState(track, 140000+20000+PICKUPLENGTH, 
+	int reverseStart = getNodeIndex(track, track[location].reverse);
+	int reverseSource, reverseDelta;
+	reverseSource = distanceAfterForTrackState(track, 140000+20000+PICKUPLENGTH, 
 					reverseStart, 0, &reverseDelta);
-	  int reverseDistance = shortestPath(reverseSource, msg.dest, track, 
+	int reverseDistance = shortestPath(reverseSource, msg.dest, track, 
 					&reversePath, msg.doReverse, NULL);
-	  if(reverseDistance < forwardDistance) {
-	    copyPath(&path, &reversePath);
-	    reverseTrain(MyParentTid());
-
-	    delta = getTrainLocation(trainTid, &location);
-	    curUnreserveLocation = distanceBeforeForTrackState(track, 20000+140000+PICKUPLENGTH,
-						location, delta, &reply);
-	    printf("releasing track starting at %s\r", track[rearReserve].name);
-	    while(rearReserve != curUnreserveLocation) {
-	      returnReservation(rearReserve, getNextNodeForTrackState(track, rearReserve));
-	      rearReserve = getNextNodeForTrackState(track, rearReserve);
-	    }
-	  }
+	if(reverseDistance < forwardDistance) {
+	  copyPath(&path, &reversePath);
+	  reverseTrain(MyParentTid());
 	}
 
   	if((path.node[path.numNodes-2])->reverse == path.node[path.numNodes-1]) {
@@ -1578,28 +1588,24 @@ void trainDriver() {
 	forwardDistance = shortestPath(location, msg.dest, track, &path, msg.doReverse, badEdge);
 	rearReserve = getNodeIndex(track, (path.node[curReserve])->reverse);
  
-	if(msg.doReverse == false) {	
-	  int reverseStart = getNextNodeForTrackState(track, location);
-	  int reverseSource, reverseDelta;
-	  reverseStart = getNodeIndex(track, track[reverseStart].reverse);
-	  reverseDelta = adjDistance(&track[reverseStart], track[location].reverse) - delta;
-	  reverseSource = distanceAfterForTrackState(track, 140000+20000+PICKUPLENGTH, 
+	reverseStart = getNextNodeForTrackState(track, location);
+	reverseStart = getNodeIndex(track, track[reverseStart].reverse);
+	reverseDelta = adjDistance(&track[reverseStart], track[location].reverse) - delta;
+	reverseSource = distanceAfterForTrackState(track, 140000+20000+PICKUPLENGTH, 
 					reverseStart, reverseDelta, &reverseDelta);
-	  printf("finding reverse path starting at %s + %dcm\r", track[reverseSource].name, reverseDelta/10000);
-	  int reverseDistance = shortestPath(reverseSource, msg.dest, track, 
+	reverseDistance = shortestPath(reverseSource, msg.dest, track, 
 					&reversePath, msg.doReverse, badEdge);
-	  if(reverseDistance < forwardDistance) {
-	    copyPath(&path, &reversePath);
-	    reverseTrain(MyParentTid());
+	if(reverseDistance < forwardDistance) {
+	  copyPath(&path, &reversePath);
+	  reverseTrain(MyParentTid());
 
-	    delta = getTrainLocation(trainTid, &location);
-	    curUnreserveLocation = distanceBeforeForTrackState(track, 20000+140000+PICKUPLENGTH,
+	  delta = getTrainLocation(trainTid, &location);
+	  curUnreserveLocation = distanceBeforeForTrackState(track, 20000+140000+PICKUPLENGTH,
 						location, delta, &reply);
-	    printf("releasing track starting at %s\r", track[rearReserve].name);
-	    while(rearReserve != curUnreserveLocation) {
-	      returnReservation(rearReserve, getNextNodeForTrackState(track, rearReserve));
-	      rearReserve = getNextNodeForTrackState(track, rearReserve);
-	    }
+	  while(rearReserve != curUnreserveLocation) {
+	    printColored(trainColor, BLACK, "returning reservation between %s and %s at recalculation\r", track[rearReserve].name, track[getNextNodeForTrackState(track, rearReserve)].name);
+	    returnReservation(rearReserve, getNextNodeForTrackState(track, rearReserve));
+	    rearReserve = getNextNodeForTrackState(track, rearReserve);
 	  }
 	}
 
@@ -1627,8 +1633,6 @@ void trainDriver() {
 	curReserve = 1, curUnreserve = 0;
 	curUnreserveLocation = distanceBeforeForTrackState(track, 20000+140000+PICKUPLENGTH,
 						location, delta, &reply);
-	printf("location is %s + %dcm\r", track[location].name, delta/10000);
-	printf("first unreserve location is %s, with a calculated delta of %d\r", track[curUnreserveLocation].name, reply/10000);
   	firstNode = curNode;
 	firstSensor = curSensor;
 	lastSensor = -1;
@@ -1674,10 +1678,16 @@ void trainDriver() {
   Destroy(unreserver);
   removeTrainTask(trainTid, unreserver);
 
-  delta = getTrainLocation(trainTid, &location);
-  location = distanceBeforeForTrackState(track, 20000+140000+PICKUPLENGTH, location, delta, &delta);
-  printf("next edge to be released was %s -- %s, and the current location of the back of the train is %s + %dcm\r", (path.node[curUnreserve])->name, track[getNextNodeForTrackState(track, getNodeIndex(track, path.node[curUnreserve]))], track[location].name, delta/10000);
-
+  if(curNode != path.numNodes-1) {
+    delta = getTrainLocation(trainTid, &location);
+    location = getNextNodeForTrackState(track, location);
+    if(curReserve >= path.numNodes) curReserve = path.numNodes-1;
+    while(location != getNodeIndex(track, path.node[curReserve])) {
+      returnReservation(location, getNextNodeForTrackState(track, location));
+      location = getNextNodeForTrackState(track, location);
+    }
+  }
+  
   printColored(trainColor, BLACK, "reached destination\r");
   printReservedTracks(trainTid);
   struct TrainMessage trainMsg;
@@ -1698,7 +1708,7 @@ void trainConfiger() {
   Reply(src, (char *)&reply, sizeof(int));
 
   int sensor, oldSensor, time, oldTime, sensorsPassed;
-  int i, j;
+  int i;
 
   track_node track[TRACK_MAX];
   initTrack(track);
@@ -1726,7 +1736,7 @@ void trainConfiger() {
     oldSensor = waitOnAnySensor();
     oldTime = Time();
     sensorsPassed = 0;
-    for(j=0; j<15; j++) {
+    while(true) {
       sensor = waitOnAnySensor();
       setTrainLocation(MyParentTid(), sensor, 0);
       time = Time();

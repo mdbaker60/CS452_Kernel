@@ -31,8 +31,11 @@ int stoppingDistance(int velocity) {
   return (int)d;
 }
 int startingTime(int velocity) {
-  float t = (0.000000000002288*velocity*velocity)*velocity*velocity;
-  t -= (0.0000000261626*velocity*velocity)*velocity;
+  float t = (0.000000000002288*velocity*velocity);
+  t *= velocity*velocity;
+  float temp = (0.0000000261626*velocity*velocity);
+  temp *= velocity;
+  t -= temp;
   t += 0.0000812228*velocity*velocity;
   t += 0.0607366*velocity;
   t -= 0.191221;

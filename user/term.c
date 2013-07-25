@@ -520,7 +520,7 @@ void terminalDriver() {
   struct PRNG prng;
   seed(&prng, Time());
 
-  outputEscape("[2J[13;100r");
+  outputEscape("[2J[13;100r[37;40;0m");
   refreshScreen();
   initializeTrack();
   moveCursor(13, 1);
