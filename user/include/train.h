@@ -122,6 +122,8 @@ typedef enum {
   DIR_BACKWARD
 } train_direction;
 
+void WanderTask();
+
 char *getHomeFromTrainID(int trainID);
 int getColorFromTrainID(int trainID);
 

@@ -12,8 +12,45 @@
 #include <math.h>
 #include <train.h>
 
-#define NUMCOMMANDS 	12
+#define NUMCOMMANDS 	13
 #define MAX_ARGS	25
+
+struct WanderMessage {
+  int trainTid;
+  int numLocations;
+  int doReverse;
+};
+
+void WanderTask() {
+  struct WanderMessage msg;
+  int src, reply;
+  Receive(&src, (char *)&msg, sizeof(struct WanderMessage));
+  Reply(src, (char *)&reply, sizeof(int));
+
+  track_node track[TRACK_MAX];
+  initTrack(track);
+
+  int i;
+  struct TrainMessage trainMsg;
+  trainMsg.type = TRAINGOTO;
+  struct PRNG prng_mem;
+  struct PRNG *prng = &prng_mem;
+  seed(prng, Time());
+
+  int trainColor = getTrainColor(msg.trainTid);
+
+  for(i=0; i<msg.numLocations; i++) {
+    trainMsg.doReverse = msg.doReverse;
+    trainMsg.speed = 12;
+    int dest = randomRange(prng, 0, TRACK_MAX-1);
+    strcpy(trainMsg.dest, track[dest].name);
+    printColored(trainColor, BLACK, "Moving to %s\r", trainMsg.dest);
+    Send(msg.trainTid, (char *)&trainMsg, sizeof(struct TrainMessage), (char *)&reply, sizeof(int));
+  }
+
+  Send(MyParentTid(), (char *)&src, sizeof(int), (char *)&reply, sizeof(int));
+  Destroy(MyTid());
+}
 
 char *splitCommand(char *command);
 
@@ -30,7 +67,7 @@ int largestPrefix(char *str1, char *str2) {
 }
 
 int tabComplete(char *command) {
-  char *commands[NUMCOMMANDS] = {"q", "tr", "rv", "sw", "selectTrack", "move", "randomizeSwitches", "init", "clear", "configureVelocities", "addTrain", "changeTrainColor"};
+  char *commands[NUMCOMMANDS] = {"q", "tr", "rv", "sw", "selectTrack", "move", "randomizeSwitches", "init", "clear", "configureVelocities", "addTrain", "changeTrainColor", "wander"};
 
   int length = strlen(command);
   char *arg1 = splitCommand(command);
@@ -479,6 +516,28 @@ void parseCommand(char *command, int *trainSpeeds, int *train, struct PRNG *prng
 	printColored(MAGENTA, BLACK, "magenta, ");
 	printColored(CYAN, BLACK, "cyan, ");
 	printf("and white\r");
+      }
+    }
+  }else if(strcmp(argv[0], "wander") == 0) {
+    if(numArgs(argc, argv) < 2) {
+      printColored(RED, BLACK, "Usage: wander train1_num... num_paths\r");
+    }else{
+      int numTrains = numArgs(argc, argv)-1;
+      int i;
+      int wanderTasks[6];
+      int src, reply;
+      struct WanderMessage msg;
+      for(i=0; i<numTrains; i++) {
+	wanderTasks[i] = Create(2, WanderTask);
+	msg.trainTid = train[strToInt(getArgument(argc, argv, i))];
+	msg.numLocations = strToInt(getArgument(argc, argv, numTrains));
+	msg.doReverse = getFlag(argc, argv, "r");
+	Send(wanderTasks[i], (char *)&msg, sizeof(struct WanderMessage), (char *)&reply, sizeof(int));
+      }
+
+      for(i=0; i<numTrains; i++) {
+	Receive(&src, (char *)&reply, sizeof(int));
+	Reply(src, (char *)&reply, sizeof(int));
       }
     }
   }else{

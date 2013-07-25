@@ -1457,7 +1457,8 @@ void trainDriver() {
 	curNode++;
 	break;
       case SENSORMISSED:
-	printColored(trainColor, RED, "sensor %s failed to trigger\r", (path.node[lastSensor])->name);
+	printColored(trainColor, RED, "sensor %s failed to trigger", (path.node[lastSensor])->name);
+	printf("\r");
 	lastSensor = curSensor;
 	curSensor = getNextSensor(&path, curSensor);
       case SENSORDONE:
@@ -1505,8 +1506,9 @@ void trainDriver() {
 	if(getAccState(trainTid) != DECELERATING) {
 	  setDecelerating(trainTid);
 	}
-	printColored(trainColor, RED, "turnout BR%d failed to switch\r", 
+	printColored(trainColor, RED, "turnout BR%d failed to switch", 
 		     brokenSwitchNum[messageType-SWITCH0MISSED]);
+	printf("\r");
 	switchState = getSwitchState(brokenSwitchNum[messageType-SWITCH0MISSED]);
 	switchState = (switchState == 'S') ? 'C' : 'S';
 	setSwitchState(brokenSwitchNum[messageType-SWITCH0MISSED], switchState);
@@ -1703,7 +1705,7 @@ void trainDriver() {
 	    curUnreserveLocation = -1;
 	  }
 	}else{
-	  if((path.node[curUnreserve-1])->reverse == path.node[curUnreserve]) {
+	  if(curUnreserve != 0 && (path.node[curUnreserve-1])->reverse == path.node[curUnreserve]) {
 	    int curReverseNode = getNodeIndex(track, path.node[curUnreserve]);
 	    int dist = 0;
 	    while(dist <= 20000+140000+PICKUPLENGTH+REVERSEOVERSHOOT) {
