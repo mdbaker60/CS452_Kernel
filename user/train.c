@@ -1573,6 +1573,7 @@ void trainDriver() {
 	firstSensor = curSensor;
 	lastSensor = -1;
 	reserveStopLocation = -1;
+        curReverseReserve = -1;
 
 	setAccelerating(trainTid);
 	break;
@@ -1683,6 +1684,7 @@ void trainDriver() {
 	firstSensor = curSensor;
 	lastSensor = -1;
 	reserveStopLocation = -1;
+        curReverseReserve = -1;
 
 	setAccelerating(trainTid);
 	//releaseAllReservations(trainTid, -1, -1);
@@ -1701,6 +1703,17 @@ void trainDriver() {
 	    curUnreserveLocation = -1;
 	  }
 	}else{
+	  if((path.node[curUnreserve-1])->reverse == path.node[curUnreserve]) {
+	    int curReverseNode = getNodeIndex(track, path.node[curUnreserve]);
+	    int dist = 0;
+	    while(dist <= 20000+140000+PICKUPLENGTH+REVERSEOVERSHOOT) {
+	      int next = getNextNodeForTrackState(track, curReverseNode);
+	      returnReservation(curReverseNode, next);
+	      dist += adjDistance(&track[curReverseNode], &track[next]);
+	      printColored(trainColor, BLACK, "releasing track between %s and %s that was reserved for reverse\r", track[curReverseNode].name, track[next].name);
+	      curReverseNode = next;
+	    }
+	  }
 	  unreserveMsg.node1 = getNodeIndex(track, path.node[curUnreserve]);
 	  unreserveMsg.node2 = getNodeIndex(track, path.node[curUnreserve+1]);
 	  unreserveMsg.done = false;
