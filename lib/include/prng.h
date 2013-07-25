@@ -2,13 +2,13 @@
 #define __PRNG_H__
 
 struct PRNG {
-  int seed;
+  unsigned int seed;
 };
 
 
 
-void seed(struct PRNG *generator, int newSeed);
-int random(struct PRNG *generator);
-int randomRange(struct PRNG *generator, int l, int h);
+void seed(struct PRNG *generator, unsigned int newSeed);
+unsigned int random(struct PRNG *generator);
+unsigned int randomRange(struct PRNG *generator, unsigned int l, unsigned int h);
 
 #endif

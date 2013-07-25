@@ -42,9 +42,9 @@ void WanderTask() {
   for(i=0; i<msg.numLocations; i++) {
     trainMsg.doReverse = msg.doReverse;
     trainMsg.speed = 12;
-    int dest = randomRange(prng, 0, TRACK_MAX-1);
+    int dest = random(prng)%TRACK_MAX;
     strcpy(trainMsg.dest, track[dest].name);
-    printColored(trainColor, BLACK, "Moving to %s\r", trainMsg.dest);
+    printColored(trainColor, BLACK, "Moving to %s(index %d)\r", trainMsg.dest, dest);
     Send(msg.trainTid, (char *)&trainMsg, sizeof(struct TrainMessage), (char *)&reply, sizeof(int));
   }
 

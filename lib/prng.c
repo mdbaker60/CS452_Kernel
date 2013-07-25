@@ -2,19 +2,19 @@
 
 #include <bwio.h>
 
-void seed(struct PRNG *generator, int newSeed) {
+void seed(struct PRNG *generator, unsigned int newSeed) {
   generator->seed = newSeed;
 }
 
-int random(struct PRNG *generator) {
-  int next = generator->seed;
+unsigned int random(struct PRNG *generator) {
+  unsigned int next = generator->seed;
   next = 36969*(next & 65535) + (next >> 16);
   generator->seed = next;
   return next;
 }
 
-int randomRange(struct PRNG *generator, int l, int h) {
-  int rvalue = random(generator);
+unsigned int randomRange(struct PRNG *generator, unsigned int l, unsigned int h) {
+  unsigned int rvalue = random(generator);
 
   return (rvalue % (h-l+1)) + l;
 }
