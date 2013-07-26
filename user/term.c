@@ -29,6 +29,7 @@ void WanderTask() {
 
   track_node track[TRACK_MAX];
   initTrack(track);
+  int trackSize = (getTrack() == TRACKA) ? NUM_TRACKA : NUM_TRACKB;
 
   int i;
   struct TrainMessage trainMsg;
@@ -42,7 +43,7 @@ void WanderTask() {
   for(i=0; i<msg.numLocations; i++) {
     trainMsg.doReverse = msg.doReverse;
     trainMsg.speed = 12;
-    int dest = random(prng)%TRACK_MAX;
+    int dest = random(prng)%trackSize;
     strcpy(trainMsg.dest, track[dest].name);
     printColored(trainColor, BLACK, "Moving to %s(index %d)\r", trainMsg.dest, dest);
     Send(msg.trainTid, (char *)&trainMsg, sizeof(struct TrainMessage), (char *)&reply, sizeof(int));

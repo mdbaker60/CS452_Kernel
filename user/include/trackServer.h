@@ -5,6 +5,8 @@
 
 #define TRACKA		0
 #define TRACKB		1
+#define NUM_TRACKA	144
+#define NUM_TRACKB	140
 
 #define NUMTRAINS 	80
 #define NUMSENSORS	80
@@ -32,6 +34,8 @@
 struct SensorStates {
   int stateInfo[3];
 };
+
+void getMergeEdges(track_node *node1, track_node *node2, track_edge **edge1, track_edge **edge2);
 
 void TrackServerInit();
 

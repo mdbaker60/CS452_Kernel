@@ -8,6 +8,7 @@
 #include <trackServer.h>
 #include <string.h>
 #include <prng.h>
+#include <assert.h>
 
 char *getHomeFromTrainID(int trainID) {
   switch(trainID) {
@@ -1025,7 +1026,8 @@ int getNextStop(struct Path *path, int curNode) {
 
 int getNextSwitch(struct Path *path, int curNode) {
   curNode++;
-  while(curNode < (path->numNodes)-1) {
+  while(curNode < (path->numNodes)-1 || 
+        (curNode == (path->numNodes)-1 && ((path->node)[curNode])->type == NODE_MERGE)) {
     if(((path->node)[curNode])->type == NODE_BRANCH || ((path->node)[curNode])->type == NODE_MERGE) {
       return curNode;
     }
@@ -1224,8 +1226,11 @@ void unreserveWatcher() {
     Send(driver, (char *)&message, sizeof(int), (char *)&unreserveInfo, sizeof(struct UnreserveMessage));
     if(unreserveInfo.done) break;
 
+    //int location;
+    //int delta = getTrainLocation(trainTid, &location);
+    //printf("waiting for location %d + %d to return reservation ending with %d\rcurrent location is %d + %d\r", unreserveInfo.location, unreserveInfo.delta, unreserveInfo.node2, location, delta);
     waitForLocation(trainTid, unreserveInfo.location, unreserveInfo.delta);
-    printf("returning reservation between nodes %d and %d\r", unreserveInfo.node1, unreserveInfo.node2);
+    //printf("returning reservation between nodes %d and %d\r", unreserveInfo.node1, unreserveInfo.node2);
     returnReservation(unreserveInfo.node1, unreserveInfo.node2);
   }
 }
@@ -1252,7 +1257,7 @@ void reserveWatcher() {
     }
     location = reserveInfo.location;
     delta = reserveInfo.delta;
-    printf("reserving track between nodes %d and %d\r", reserveInfo.node1, reserveInfo.node2);
+    //printf("reserving track between nodes %d and %d\r", reserveInfo.node1, reserveInfo.node2);
     int gotReservation = getReservation(trainTid, reserveInfo.node1, reserveInfo.node2);
     if(gotReservation != MyTid()) {
       message = RESERVENEEDSTOP;
@@ -1386,7 +1391,7 @@ void trainDriver() {
 	  }
 	  stopNode = distanceBefore(&path, stopLength, curStop, &stopDistance);
 	}else{
-	  stopLength += ((path.node[reserveStopLocation])->type == NODE_MERGE) ? 250000 : 100000;
+	  stopLength += 100000;
 	  stopNode = distanceBefore(&path, stopLength, reserveStopLocation, &stopDistance);
 	}
 	delta = getTrainLocation(trainTid, &location);
@@ -1403,14 +1408,13 @@ void trainDriver() {
 	if(curSwitch == -1) {
 	  break;	//reached last switch in path
 	}
-	switchDistance = getTrainMaxVelocity(trainTid)*30;
+	switchDistance = getTrainMaxVelocity(trainTid)*35;
 	pathNode = distanceBefore(&path, switchDistance, curSwitch, &switchMsg.delta);
 	switchMsg.location = getNodeIndex(track, path.node[pathNode]);
 	if(switchMsg.delta < 0) {
 	  switchMsg.location = distanceBeforeForTrackState(track, -switchMsg.delta, 
 				switchMsg.location, 0, &switchMsg.delta);
 	}
-	printColored(trainColor, BLACK, "switching %s at %s + %dcm\r", (path.node[curSwitch])->name, track[switchMsg.location].name, switchMsg.delta/10000);
 	switchMsg.switchNum = (path.node[curSwitch])->num;
 	if((path.node[curSwitch])->type == NODE_BRANCH) {
 	  switchMsg.direction = adjDirection(path.node[curSwitch], path.node[curSwitch+1]);
@@ -1423,7 +1427,7 @@ void trainDriver() {
 	curSwitch = getNextSwitch(&path, curSwitch);
 	break;
       case NODEDONE:
-	if(curNode == path.numNodes-1) {
+	if(curNode == path.numNodes) {
 	  break;
 	}
 
@@ -1472,9 +1476,9 @@ void trainDriver() {
 	    delta = 140000;
 	  }
 	  err -= delta;
-	  printColored(trainColor, BLACK, 
+	  /*printColored(trainColor, BLACK, 
 		       "distance error at sensor %s is %dmm\r", 
-		       (path.node[lastSensor])->name, err/1000);
+		       (path.node[lastSensor])->name, err/1000);*/
 
 	  setTrainLocation(trainTid, getNodeIndex(track, path.node[lastSensor]), delta);
 	}
@@ -1597,7 +1601,6 @@ void trainDriver() {
 	  if(reverseReserveDist >= 20000+140000+PICKUPLENGTH+REVERSEOVERSHOOT) {
 	    curReverseReserve = -1;
 	  }
-	  printColored(trainColor, BLACK, "reserving edge between %s and %s for reverse\r", track[reserveMsg.node1].name, track[reserveMsg.node2].name);
 	  reserveMsg.done = false;
 	  Reply(src, (char *)&reserveMsg, sizeof(struct ReserveMessage));
 	}else{
@@ -1634,8 +1637,10 @@ void trainDriver() {
 	//Calculate new path
 	track_edge *badEdge = adjEdge(&track[reserveMsg.node1], &track[reserveMsg.node2]);
 	delta = getTrainLocation(trainTid, &location);
+	assert(curReserve > 0, "curReserve == 0 during recalculation");
+	rearReserve = getNodeIndex(track, (path.node[curReserve-1])->reverse);
+
 	forwardDistance = shortestPath(location, msg.dest, track, &path, msg.doReverse, badEdge);
-	rearReserve = getNodeIndex(track, (path.node[curReserve])->reverse);
  
 	reverseStart = getNextNodeForTrackState(track, location);
 	reverseStart = getNodeIndex(track, track[reverseStart].reverse);
@@ -1651,10 +1656,11 @@ void trainDriver() {
 	  delta = getTrainLocation(trainTid, &location);
 	  curUnreserveLocation = distanceBeforeForTrackState(track, 20000+140000+PICKUPLENGTH,
 						location, delta, &reply);
-	  while(rearReserve != curUnreserveLocation) {
-	    printColored(trainColor, BLACK, "returning reservation between %s and %s at recalculation\r", track[rearReserve].name, track[getNextNodeForTrackState(track, rearReserve)].name);
-	    returnReservation(rearReserve, getNextNodeForTrackState(track, rearReserve));
-	    rearReserve = getNextNodeForTrackState(track, rearReserve);
+	  if(curUnreserveLocation != getNodeIndex(track, (path.node[curReserve])->reverse)) {
+	    while(rearReserve != curUnreserveLocation) {
+	      returnReservation(rearReserve, getNextNodeForTrackState(track, rearReserve));
+	      rearReserve = getNextNodeForTrackState(track, rearReserve);
+	    }
 	  }
 	}
 
@@ -1696,6 +1702,9 @@ void trainDriver() {
 	reserveStopLocation = curReserve-1;
 	break;
       case UNRESERVEDONE:
+	if(curUnreserve == path.numNodes-1) {
+	  break;
+	}
 	if(curUnreserve == 0 && curUnreserveLocation != -1) {
 	  unreserveMsg.node1 = curUnreserveLocation;
 	  unreserveMsg.node2 = getNextNodeForTrackState(track, curUnreserveLocation);
@@ -1706,18 +1715,18 @@ void trainDriver() {
 	  }
 	}else{
 	  if(curUnreserve != 0 && (path.node[curUnreserve-1])->reverse == path.node[curUnreserve]) {
-	    int curReverseNode = getNodeIndex(track, path.node[curUnreserve]);
+	    int curReverseNode = getNodeIndex(track, path.node[curUnreserve-1]);
 	    int dist = 0;
 	    while(dist <= 20000+140000+PICKUPLENGTH+REVERSEOVERSHOOT) {
 	      int next = getNextNodeForTrackState(track, curReverseNode);
 	      returnReservation(curReverseNode, next);
 	      dist += adjDistance(&track[curReverseNode], &track[next]);
-	      printColored(trainColor, BLACK, "releasing track between %s and %s that was reserved for reverse\r", track[curReverseNode].name, track[next].name);
 	      curReverseNode = next;
 	    }
 	  }
 	  unreserveMsg.node1 = getNodeIndex(track, path.node[curUnreserve]);
 	  unreserveMsg.node2 = getNodeIndex(track, path.node[curUnreserve+1]);
+	  //printf("releasing reservation between %s and %s\r", (path.node[curUnreserve])->name, (path.node[curUnreserve+1])->name);
 	  unreserveMsg.done = false;
 	  curUnreserve++;
 	}
@@ -1739,7 +1748,7 @@ void trainDriver() {
   Destroy(unreserver);
   removeTrainTask(trainTid, unreserver);
 
-  if(curNode != path.numNodes-1) {
+  if(curNode != path.numNodes) {
     delta = getTrainLocation(trainTid, &location);
     location = getNextNodeForTrackState(track, location);
     if(curReserve >= path.numNodes) curReserve = path.numNodes-1;
@@ -1749,7 +1758,8 @@ void trainDriver() {
     }
   }
   
-  printColored(trainColor, BLACK, "reached destination\r");
+  printColored(trainColor, BLACK, "Arrived at %s\r", track[msg.dest].name);
+  printColored(trainColor, BLACK, "last reservation to be released was between %s and %s, and was to occur at %s + %dcm\r", track[unreserveMsg.node1].name, track[unreserveMsg.node2].name, track[unreserveMsg.location].name, unreserveMsg.delta/10000);
   printReservedTracks(trainTid);
   struct TrainMessage trainMsg;
   trainMsg.type = TRAINDRIVERDONE;

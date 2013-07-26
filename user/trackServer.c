@@ -32,10 +32,40 @@ struct ReserveNode {
   int tid;
   track_edge *edge;
   track_edge *reverseEdge;
+  track_edge *mergeEdge1;
+  track_edge *mergeEdge2;
   int train;
   struct ReserveNode *next;
   struct ReserveNode *last;
 };
+
+track_edge *getOppositeBranchEdge(track_node *source, track_node *dest) {
+  if(source->type == NODE_MERGE) {
+    int branchDir = adjDirection(source->reverse, dest->reverse);
+    if(branchDir != -1) {
+      branchDir = (branchDir == DIR_STRAIGHT) ? DIR_CURVED : DIR_STRAIGHT;
+      return &((source->reverse)->edge)[branchDir];
+    }
+  }else if(source->type == NODE_BRANCH) {
+    int branchDir = adjDirection(source, dest);
+    if(branchDir != -1) {
+      branchDir = (branchDir == DIR_STRAIGHT) ? DIR_CURVED : DIR_STRAIGHT;
+      return &(source->edge)[branchDir];
+    }
+  }
+
+  return NULL;
+}
+
+void getMergeEdges(track_node *node1, track_node *node2, track_edge **edge1, track_edge **edge2) {
+  *edge1 = getOppositeBranchEdge(node1, node2);
+  *edge2 = getOppositeBranchEdge(node2, node1);
+
+  if(*edge1 == NULL) {
+    *edge1 = *edge2;
+    *edge2 = NULL;
+  }
+}
 
 void printSwitchTable(char *states) {
   int i;
@@ -139,7 +169,7 @@ void changeSwitch(int switchNum, char state) {
 }
 
 void TrackServerInit() {
-  int i;
+  int i, j;
   struct SensorStates sensorStates;
   char switchStates[NUMSWITCHES];
   for(i=0; i<NUMSWITCHES; i++) {
@@ -177,11 +207,17 @@ void TrackServerInit() {
   track_node track[TRACK_MAX];
   init_tracka(track);
   for(i=0; i<TRACK_MAX; i++) {
-    track[i].edge[0].reservedTrain = -1;
-    track[i].edge[1].reservedTrain = -1;
+    ((track[i]).edge[0]).reservedTrain = -1;
+    ((track[i]).edge[1]).reservedTrain = -1;
+    ((track[i]).edge[0]).numBlocked = 0;
+    ((track[i]).edge[1]).numBlocked = 0;
   }
+  track[122].edge[DIR_CURVED].numBlocked = 1;
+  track[64].edge[DIR_AHEAD].numBlocked = 1;
   track_edge *edge;
   track_edge *reverseEdge;
+  track_edge *mergeEdge1;
+  track_edge *mergeEdge2;
   while(true) {
     Receive(&src, (char *)&msg, sizeof(struct TrackMessageBuf));
     switch(msg.type) {
@@ -267,6 +303,8 @@ void TrackServerInit() {
   	for(i=0; i<TRACK_MAX; i++) {
   	  ((track[i]).edge[0]).reservedTrain = -1;
   	  ((track[i]).edge[1]).reservedTrain = -1;
+	  ((track[i]).edge[0]).numBlocked = 0;
+	  ((track[i]).edge[1]).numBlocked = 0;
   	}
 	reply = 0;
 	Reply(src, (char *)&reply, sizeof(int));
@@ -318,11 +356,21 @@ void TrackServerInit() {
 	break;
       case TRACKRELEASEALLRESERV:
 	for(i=0; i<TRACK_MAX; i++) {
-	  if(((track[i]).edge[0]).reservedTrain == msg.data[2]) {
-	    ((track[i]).edge[0]).reservedTrain = -1;
-	  }
-	  if(((track[i]).edge[1]).reservedTrain == msg.data[2]) {
-	    ((track[i]).edge[1]).reservedTrain = -1;
+	  for(j=0; j<2; j++) {
+	    if(((track[i]).edge[j]).reservedTrain == msg.data[2]) {
+	      ((track[i]).edge[j]).reservedTrain = -1;
+	      (((track[i].reverse)->edge)[j]).reservedTrain = -1;
+
+	      getMergeEdges(track[i].edge[j].src, track[i].edge[j].dest, &mergeEdge1, &mergeEdge2);
+	      if(mergeEdge1 != NULL) {
+		(mergeEdge1->numBlocked)--;
+		((mergeEdge1->reverse)->numBlocked)--;
+	      }
+	      if(mergeEdge2 != NULL) {
+	        (mergeEdge2->numBlocked)--;
+		((mergeEdge2->reverse)->numBlocked)--;
+	      }
+	    }
 	  }
 	}
 	if(msg.data[1] == -1) {
@@ -332,15 +380,25 @@ void TrackServerInit() {
       case TRACKRESERVE:
 	edge = adjEdge(&track[msg.data[0]], &track[msg.data[1]]);
 	reverseEdge = adjEdge(track[msg.data[1]].reverse, track[msg.data[0]].reverse);
+	getMergeEdges(&track[msg.data[0]], &track[msg.data[1]], &mergeEdge1, &mergeEdge2);
+	
 	if(edge == NULL) {
 	  Reply(src, (char *)&src, sizeof(int));
 	  break;
 	}
-	if(edge->reservedTrain != -1) {
+	if(edge->reservedTrain != -1 || edge->numBlocked > 0) {
 	  reply = edge->reservedTrain;
 	}else{
 	  edge->reservedTrain = msg.data[2];
 	  reverseEdge->reservedTrain = msg.data[2];
+	  if(mergeEdge1 != NULL) {
+	    (mergeEdge1->numBlocked)++;
+	    ((mergeEdge1->reverse)->numBlocked)++;
+	  }
+	  if(mergeEdge2 != NULL) {
+	    (mergeEdge2->numBlocked)++;
+	    ((mergeEdge2->reverse)->numBlocked)++;
+	  }
 	  reply = src;
 	}
 	Reply(src, (char *)&reply, sizeof(int));
@@ -348,20 +406,32 @@ void TrackServerInit() {
       case TRACKRESERVEBLOCK:
 	edge = adjEdge(&track[msg.data[0]], &track[msg.data[1]]);
 	reverseEdge = adjEdge(track[msg.data[1]].reverse, track[msg.data[0]].reverse);
+	getMergeEdges(&track[msg.data[0]], &track[msg.data[1]], &mergeEdge1, &mergeEdge2);
 	if(edge == NULL) {
 	  Reply(src, (char *)&src, sizeof(int));
 	  break;
 	}
-	if(edge->reservedTrain == -1) {
+	if(edge->reservedTrain == -1 && edge->numBlocked <= 0) {
 	  edge->reservedTrain = msg.data[2];
 	  reverseEdge->reservedTrain = msg.data[2];
+	  if(mergeEdge1 != NULL) {
+	    (mergeEdge1->numBlocked)++;
+	    ((mergeEdge1->reverse)->numBlocked)++;
+	  }
+	  if(mergeEdge2 != NULL) {
+	    (mergeEdge2->numBlocked)++;
+	    ((mergeEdge2->reverse)->numBlocked)++;
+	  }
 	  reply = true;
 	  Reply(src, (char *)&reply, sizeof(int));
 	}else{
 	  tempReserveNode = &reserveNodes[src & 0x7F];
 	  tempReserveNode->tid = src;
+	  tempReserveNode->train = msg.data[2];
 	  tempReserveNode->edge = edge;
 	  tempReserveNode->reverseEdge = reverseEdge;
+	  tempReserveNode->mergeEdge1 = mergeEdge1;
+	  tempReserveNode->mergeEdge2 = mergeEdge2;
 	  tempReserveNode->next = NULL;
 	  if(reserveFirst == NULL) {
 	    reserveFirst = reserveLast = tempReserveNode;
@@ -374,19 +444,42 @@ void TrackServerInit() {
       case TRACKUNRESERVE:
 	edge = adjEdge(&track[msg.data[0]], &track[msg.data[1]]);
 	reverseEdge = adjEdge(track[msg.data[1]].reverse, track[msg.data[0]].reverse);
+	getMergeEdges(&track[msg.data[0]], &track[msg.data[1]], &mergeEdge1, &mergeEdge2);
 	if(edge == NULL) {
 	  Reply(src, (char *)&src, sizeof(int));
 	  break;
 	}
 	edge->reservedTrain = -1;
 	reverseEdge->reservedTrain = -1;
+	if(mergeEdge1 != NULL) {
+	  (mergeEdge1->numBlocked)--;
+	  ((mergeEdge1->reverse)->numBlocked)--;
+	}
+	if(mergeEdge2 != NULL) {
+	  (mergeEdge2->numBlocked)--;
+	  ((mergeEdge2->reverse)->numBlocked)--;
+	}
 	Reply(src, (char *)&reply, sizeof(int));
 
 	tempReserveNode = reserveFirst;
 	while(tempReserveNode != NULL) {
-	  if(tempReserveNode->edge == edge || tempReserveNode->edge == reverseEdge) {
+	  edge = tempReserveNode->edge;
+	  reverseEdge = tempReserveNode->reverseEdge;
+	  mergeEdge1 = tempReserveNode->mergeEdge1;
+	  mergeEdge2 = tempReserveNode->mergeEdge2;
+
+	  if(edge->reservedTrain == -1 && edge->numBlocked <= 0) {
 	    edge->reservedTrain = tempReserveNode->train;
 	    reverseEdge->reservedTrain = tempReserveNode->train;
+	    if(mergeEdge1 != NULL) {
+	      (mergeEdge1->numBlocked)++;
+	      ((mergeEdge1->reverse)->numBlocked)++;
+	    }
+	    if(mergeEdge2 != NULL) {
+	      (mergeEdge2->numBlocked)++;
+	      ((mergeEdge2->reverse)->numBlocked)++;
+	    }
+
 	    reply = true;
 	    Reply(tempReserveNode->tid, (char *)&reply, sizeof(int));
 	    if(tempReserveNode->next == NULL && tempReserveNode->last == NULL) {

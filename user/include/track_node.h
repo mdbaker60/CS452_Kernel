@@ -23,6 +23,7 @@ struct track_edge {
   track_node *src, *dest;
   int dist;             /* in millimetres */
   int reservedTrain;
+  int numBlocked;
 };
 
 struct Path {
