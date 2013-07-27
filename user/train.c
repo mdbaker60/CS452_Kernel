@@ -594,7 +594,8 @@ void trainTask() {
 
 	myNode = first;
 	while(myNode != NULL) {
-	  if(location == myNode->location && delta >= myNode->delta) {
+	  if((location == myNode->location && delta >= myNode->delta) ||
+	     location == getNextNodeForTrackState(track, myNode->location)) {
 	    Reply(myNode->src, (char *)&reply, sizeof(int));
 	    if(myNode->next == NULL && myNode->last == NULL) {
 	      first = last = NULL;
@@ -671,6 +672,8 @@ void trainTask() {
 	configuring = true;
 	break;
       case TRAINSETLOCATION:
+	msg.location = distanceAfterForTrackState(track, msg.delta, msg.location, 0, &msg.delta);
+
 	nextNodeDist = adjDistance(&track[location], &track[msg.location]);
 	if(nextNodeDist != -1) {
 	  myNode = first;
@@ -1272,7 +1275,7 @@ void reserveWatcher() {
     //printf("reserving track between nodes %d and %d\r", reserveInfo.node1, reserveInfo.node2);
     int gotReservation = getReservation(trainTid, reserveInfo.node1, reserveInfo.node2);
     if(gotReservation != MyTid()) {
-      printColored(trainColor, BLACK, "waiting for track between nodes %d and %d\r", reserveInfo.node1, reserveInfo.node2);
+      //printColored(trainColor, BLACK, "waiting for track between nodes %d and %d\r", reserveInfo.node1, reserveInfo.node2);
       message = RESERVENEEDSTOP;
       Send(driver, (char *)&message, sizeof(int), (char *)&reply, sizeof(int));
 
@@ -1308,6 +1311,7 @@ void reserveWatcher() {
 }
 
 void trainDriver() {
+  printf("train driver started\r");
   struct TrainDriverMessage msg;
   int src, reply = 0;
   Receive(&src, (char *)&msg, sizeof(struct TrainDriverMessage));
@@ -1512,9 +1516,9 @@ void trainDriver() {
 	    delta = 140000;
 	  }
 	  err -= delta;
-	  /*printColored(trainColor, BLACK, 
+	  printColored(trainColor, BLACK, 
 		       "distance error at sensor %s is %dmm\r", 
-		       (path.node[lastSensor])->name, err/1000);*/
+		       (path.node[lastSensor])->name, err/1000);
 
 	  setTrainLocation(trainTid, getNodeIndex(track, path.node[lastSensor]), delta);
 	}
@@ -1758,7 +1762,9 @@ void trainDriver() {
 	  curUnreserveLocation = unreserveMsg.node2;
 	  if(&track[curUnreserveLocation] == path.node[0]) {
 	    curUnreserveLocation = -1;
+	    printColored(RED, BLACK, "initial reservations released\r");
 	  }
+	  printColored(trainColor, BLACK, "waiting for %s + %dcm to release reservation between nodes %s and %s\r", track[unreserveMsg.location].name, unreserveMsg.delta/10000, track[unreserveMsg.node1].name, track[unreserveMsg.node2].name);
 	}else{
 	  if(curUnreserve != 0 && (path.node[curUnreserve-1])->reverse == path.node[curUnreserve]) {
 	    int curReverseNode = getNodeIndex(track, path.node[curUnreserve-1]);
