@@ -60,6 +60,7 @@ struct SwitchMessage {
 struct NodeMessage {
   int location;
   int reverseNode;
+  int inMiddle;
   int done;
 };
 
@@ -83,6 +84,7 @@ struct UnreserveMessage {
   int delta;
   int node1;
   int node2;
+  int inMiddle;
   int done;
 };
 

@@ -641,8 +641,8 @@ void trainTask() {
       case TRAININIT:
 	Putc2(1, (char)2, (char)trainNum);
 	location = waitOnAnySensor();
+	location = distanceAfterForTrackState(track, 70000, location, 0, &delta);
 	Putc2(1, (char)0, (char)trainNum);
-	delta = 70000;	//stop about 7cm past point of sensor
 
 	//reserve the track at your current location
 	curLocation = distanceBeforeForTrackState(track, 20000+140000+PICKUPLENGTH, location, delta, &curDelta);
@@ -692,7 +692,8 @@ void trainTask() {
 	Reply(src, (char *)&reply, sizeof(int));
 	break;
       case TRAINWAITFORLOCATION:
-	if(location == msg.location && delta >= msg.delta) {
+	if((location == msg.location && delta >= msg.delta) ||
+	   location == getNextNodeForTrackState(track, msg.location)) {
 	  Reply(src, (char *)&reply, sizeof(int));
 	}else{
 	  myNode = &nodes[src & 0x7F];
@@ -1067,7 +1068,7 @@ int getNextNodeForTrackState(track_node *track, int location) {
   char dir;
   switch(track[location].type) {
     case NODE_EXIT:
-      return -1;
+      return location;
     case NODE_BRANCH:
       dir = getSwitchState(track[location].num);
       if(dir == 'S') {
@@ -1156,6 +1157,7 @@ void nodeWatcher() {
   Receive(&src, (char *)&trainTid, sizeof(int));
   Reply(src, (char *)&trainTid, sizeof(int));
 
+  int inMiddle = false;
   int driver = MyParentTid();
   while(true) {
     Send(driver, (char *)&message, sizeof(int), (char *)&nodeInfo, sizeof(struct NodeMessage));
@@ -1167,7 +1169,10 @@ void nodeWatcher() {
       setAccelerating(trainTid);
     }
 
-    waitForLocation(trainTid, nodeInfo.location, 0);
+    if(!inMiddle || !nodeInfo.inMiddle) {
+      waitForLocation(trainTid, nodeInfo.location, 0);
+    }
+    inMiddle = nodeInfo.inMiddle;
   }
   Destroy(MyTid());
 }
@@ -1221,6 +1226,8 @@ void unreserveWatcher() {
   Receive(&src, (char *)&trainTid, sizeof(int));
   Reply(src, (char *)&trainTid, sizeof(int));
 
+  int inMiddle = false;
+
   int driver = MyParentTid();
   while(true) {
     Send(driver, (char *)&message, sizeof(int), (char *)&unreserveInfo, sizeof(struct UnreserveMessage));
@@ -1229,7 +1236,10 @@ void unreserveWatcher() {
     //int location;
     //int delta = getTrainLocation(trainTid, &location);
     //printf("waiting for location %d + %d to return reservation ending with %d\rcurrent location is %d + %d\r", unreserveInfo.location, unreserveInfo.delta, unreserveInfo.node2, location, delta);
-    waitForLocation(trainTid, unreserveInfo.location, unreserveInfo.delta);
+    if(!inMiddle || !unreserveInfo.inMiddle) {
+      waitForLocation(trainTid, unreserveInfo.location, unreserveInfo.delta);
+    }
+    inMiddle = unreserveInfo.inMiddle;
     //printf("returning reservation between nodes %d and %d\r", unreserveInfo.node1, unreserveInfo.node2);
     returnReservation(unreserveInfo.node1, unreserveInfo.node2);
   }
@@ -1243,6 +1253,8 @@ void reserveWatcher() {
   Reply(src, (char *)&trainTid, sizeof(int));
 
   int location = -1, delta = -1;
+
+  int trainColor = getTrainColor(trainTid);
 
   int driver = MyParentTid();
   struct PRNG prngMem;
@@ -1260,10 +1272,10 @@ void reserveWatcher() {
     //printf("reserving track between nodes %d and %d\r", reserveInfo.node1, reserveInfo.node2);
     int gotReservation = getReservation(trainTid, reserveInfo.node1, reserveInfo.node2);
     if(gotReservation != MyTid()) {
+      printColored(trainColor, BLACK, "waiting for track between nodes %d and %d\r", reserveInfo.node1, reserveInfo.node2);
       message = RESERVENEEDSTOP;
       Send(driver, (char *)&message, sizeof(int), (char *)&reply, sizeof(int));
 
-      //setDecelerating(trainTid);
       int waitTime = randomRange(prng, 500, 1000);	//between 5 and 10 seconds
       int waitTask = Create(2, delayTask);
       Send(waitTask, (char *)&waitTime, sizeof(int), (char *)&reply, sizeof(int));
@@ -1304,6 +1316,17 @@ void trainDriver() {
   track_node track[TRACK_MAX];
   initTrack(track);
 
+  if(msg.source == msg.dest || track[msg.source].reverse == &track[msg.dest]) {
+    printColored(getTrainColor(MyParentTid()), BLACK, "Arrived at %s\r", track[msg.dest].name);
+    printReservedTracks(MyParentTid());
+    struct TrainMessage trainMsg;
+    trainMsg.type = TRAINDRIVERDONE;
+    Send(MyParentTid(), (char *)&trainMsg, sizeof(struct TrainMessage), (char *)&reply, sizeof(int));
+    Destroy(MyTid());
+
+    return;
+  }
+
   struct Path path;
   struct Path reversePath;
   int forwardDistance = shortestPath(msg.source, msg.dest, track, &path, msg.doReverse, NULL);
@@ -1315,10 +1338,11 @@ void trainDriver() {
   int reverseDistance = shortestPath(reverseSource, msg.dest, track, &reversePath, msg.doReverse, NULL);
   if(reverseDistance < forwardDistance) {
     copyPath(&path, &reversePath);
-    int location;
-    int delta = getTrainLocation(MyParentTid(), &location);
     reverseTrain(MyParentTid());
-    delta = getTrainLocation(MyParentTid(), &location);
+  }
+
+  if((path.node[path.numNodes-2])->reverse == path.node[path.numNodes-1]) {
+    path.numNodes--;
   }
 
   //initailize workers
@@ -1347,6 +1371,9 @@ void trainDriver() {
   int curReserve = 1, curUnreserve = 0;
   int curUnreserveLocation = distanceBeforeForTrackState(track, 20000+140000+PICKUPLENGTH,
 						location, delta, &delta);
+  if(&track[curUnreserveLocation] == path.node[0]) {
+    curUnreserveLocation = -1;
+  }
   int firstNode = curNode, firstSensor = curSensor;
 
   int curReverseReserve = -1, reverseReserveDist = 0;
@@ -1408,7 +1435,7 @@ void trainDriver() {
 	if(curSwitch == -1) {
 	  break;	//reached last switch in path
 	}
-	switchDistance = getTrainMaxVelocity(trainTid)*35;
+	switchDistance = getTrainMaxVelocity(trainTid)*40;
 	pathNode = distanceBefore(&path, switchDistance, curSwitch, &switchMsg.delta);
 	switchMsg.location = getNodeIndex(track, path.node[pathNode]);
 	if(switchMsg.delta < 0) {
@@ -1430,6 +1457,10 @@ void trainDriver() {
 	if(curNode == path.numNodes) {
 	  break;
 	}
+
+	delta = getTrainLocation(trainTid, &location);
+	printColored(trainColor, BLACK, "waiting for node %s\r", (path.node[curNode])->name);
+	printColored(trainColor, BLACK, "current location is %s + %dcm\r", track[location].name, delta/10000);
 
 	nodeMsg.location = getNodeIndex(track, path.node[curNode]);
 	if((path.node[curNode-1])->reverse == path.node[curNode]) {
@@ -1455,6 +1486,11 @@ void trainDriver() {
 	  }
 	}else{
 	  nodeMsg.reverseNode = false;
+	}
+	if((path.node[curNode])->num >= 153) {
+	  nodeMsg.inMiddle = true;
+	}else{
+	  nodeMsg.inMiddle = false;
 	}
 	nodeMsg.done = false;
 	Reply(src, (char *)&nodeMsg, sizeof(struct NodeMessage));
@@ -1575,6 +1611,9 @@ void trainDriver() {
 	curReserve = 1, curUnreserve = 0;
 	curUnreserveLocation = distanceBeforeForTrackState(track, 20000+140000+PICKUPLENGTH,
 						location, delta, &delta);
+	if(&track[curUnreserveLocation] == path.node[0]) {
+	  curUnreserveLocation = -1;
+	}
   	firstNode = curNode;
 	firstSensor = curSensor;
 	lastSensor = -1;
@@ -1598,6 +1637,7 @@ void trainDriver() {
 	  curReverseReserve = getNextNodeForTrackState(track, curReverseReserve);
 	  reserveMsg.node2 = curReverseReserve;
 	  reverseReserveDist += adjDistance(&track[reserveMsg.node1], &track[reserveMsg.node2]);
+	  printColored(trainColor, BLACK, "waiting for %s + %dcm to make reservation between %s and %s\r", track[reserveMsg.location].name, reserveMsg.delta/10000, track[reserveMsg.node1].name, track[reserveMsg.node2].name);
 	  if(reverseReserveDist >= 20000+140000+PICKUPLENGTH+REVERSEOVERSHOOT) {
 	    curReverseReserve = -1;
 	  }
@@ -1611,6 +1651,7 @@ void trainDriver() {
 	  reserveMsg.node1 = getNodeIndex(track, path.node[curReserve]);
 	  reserveMsg.node2 = getNodeIndex(track, path.node[curReserve+1]);
 	  reserveMsg.done = false;
+	  printColored(trainColor, BLACK, "waiting for %s + %dcm to make reservation between %s and %s\r", track[reserveMsg.location].name, reserveMsg.delta/10000, track[reserveMsg.node1].name, track[reserveMsg.node2].name);
 	  Reply(src, (char *)&reserveMsg, sizeof(struct ReserveMessage));
 	  curReserve++;
 
@@ -1622,6 +1663,8 @@ void trainDriver() {
 	}
 	break;
       case RESERVETIMEOUT:
+	printColored(trainColor, BLACK, "timed out waiting for track between %s and %s\r", track[reserveMsg.node1].name, track[reserveMsg.node2].name);
+
 	//Destroy all helper tasks;
 	Destroy(sensorer);
 	removeTrackTask(sensorer);
@@ -1688,6 +1731,9 @@ void trainDriver() {
 	curReserve = 1, curUnreserve = 0;
 	curUnreserveLocation = distanceBeforeForTrackState(track, 20000+140000+PICKUPLENGTH,
 						location, delta, &reply);
+	if(&track[curUnreserveLocation] == path.node[0]) {
+	  curUnreserveLocation = -1;
+	}
   	firstNode = curNode;
 	firstSensor = curSensor;
 	lastSensor = -1;
@@ -1726,12 +1772,17 @@ void trainDriver() {
 	  }
 	  unreserveMsg.node1 = getNodeIndex(track, path.node[curUnreserve]);
 	  unreserveMsg.node2 = getNodeIndex(track, path.node[curUnreserve+1]);
-	  //printf("releasing reservation between %s and %s\r", (path.node[curUnreserve])->name, (path.node[curUnreserve+1])->name);
+	  printColored(trainColor, BLACK, "waiting for %s + %dcm to release reservation between nodes %s an %s\r", track[unreserveMsg.location].name, unreserveMsg.delta/10000, track[unreserveMsg.node1].name, track[unreserveMsg.node2].name);
 	  unreserveMsg.done = false;
 	  curUnreserve++;
 	}
 	unreserveMsg.location = distanceAfterForTrackState(track, 20000+140000+PICKUPLENGTH, 
 						unreserveMsg.node2, 0, &unreserveMsg.delta);
+	if(track[unreserveMsg.node2].num >= 153) {
+	  unreserveMsg.inMiddle = true;
+	}else{
+	  unreserveMsg.inMiddle = false;
+	}
 	Reply(src, (char *)&unreserveMsg, sizeof(struct UnreserveMessage));
 	break;
     }
@@ -1748,8 +1799,9 @@ void trainDriver() {
   Destroy(unreserver);
   removeTrainTask(trainTid, unreserver);
 
-  if(curNode != path.numNodes) {
-    delta = getTrainLocation(trainTid, &location);
+  delta = getTrainLocation(trainTid, &location);
+  if(curNode < path.numNodes && path.node[path.numNodes-1] != &track[location]) {
+    printf("releasing extra reservations ahead of train. curNode is %s\r", (path.node[curNode])->name);
     location = getNextNodeForTrackState(track, location);
     if(curReserve >= path.numNodes) curReserve = path.numNodes-1;
     while(location != getNodeIndex(track, path.node[curReserve])) {
@@ -1757,8 +1809,10 @@ void trainDriver() {
       location = getNextNodeForTrackState(track, location);
     }
   }
+  delta = getTrainLocation(trainTid, &location);
   
   printColored(trainColor, BLACK, "Arrived at %s\r", track[msg.dest].name);
+  printColored(trainColor, BLACK, "actual location is %s + %dcm\r", track[location].name, delta/10000);
   printColored(trainColor, BLACK, "last reservation to be released was between %s and %s, and was to occur at %s + %dcm\r", track[unreserveMsg.node1].name, track[unreserveMsg.node2].name, track[unreserveMsg.location].name, unreserveMsg.delta/10000);
   printReservedTracks(trainTid);
   struct TrainMessage trainMsg;

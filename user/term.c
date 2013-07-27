@@ -45,7 +45,7 @@ void WanderTask() {
     trainMsg.speed = 12;
     int dest = random(prng)%trackSize;
     strcpy(trainMsg.dest, track[dest].name);
-    printColored(trainColor, BLACK, "Moving to %s(index %d)\r", trainMsg.dest, dest);
+    printColored(trainColor, BLACK, "Moving to %s(destination %d)\r", trainMsg.dest, i+1);
     Send(msg.trainTid, (char *)&trainMsg, sizeof(struct TrainMessage), (char *)&reply, sizeof(int));
   }
 

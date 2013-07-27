@@ -386,8 +386,10 @@ void TrackServerInit() {
 	  Reply(src, (char *)&src, sizeof(int));
 	  break;
 	}
-	if(edge->reservedTrain != -1 || edge->numBlocked > 0) {
+	if(edge->reservedTrain != -1) {
 	  reply = edge->reservedTrain;
+	}else if(edge->numBlocked > 0) {
+	  reply = -1;
 	}else{
 	  edge->reservedTrain = msg.data[2];
 	  reverseEdge->reservedTrain = msg.data[2];
