@@ -650,6 +650,7 @@ void trainTask() {
 	  blockOnReservation(MyTid(), curLocation, getNextNodeForTrackState(track, curLocation));
 	  curLocation = getNextNodeForTrackState(track, curLocation);
 	}
+	blockOnReservation(MyTid(), location, getNextNodeForTrackState(track, location));
 	//blockOnReservation(MyTid(), getNodeIndex(track, track[location].reverse),
 			//getNodeIndex(track, ((track[location].reverse)->edge)[DIR_AHEAD].dest));
 	//printColored(myColor, BLACK, "train %d located sensor %s\r", trainNum, track[location].name);
@@ -694,8 +695,8 @@ void trainTask() {
 	Reply(src, (char *)&reply, sizeof(int));
 	break;
       case TRAINWAITFORLOCATION:
-	if((location == msg.location && delta >= msg.delta) ||
-	   location == getNextNodeForTrackState(track, msg.location)) {
+	if((location == msg.location && delta >= msg.delta)) {/* ||
+	   location == getNextNodeForTrackState(track, msg.location)) {*/
 	  Reply(src, (char *)&reply, sizeof(int));
 	}else{
 	  myNode = &nodes[src & 0x7F];
@@ -1256,8 +1257,6 @@ void reserveWatcher() {
 
   int location = -1, delta = -1;
 
-  int trainColor = getTrainColor(trainTid);
-
   int driver = MyParentTid();
   struct PRNG prngMem;
   struct PRNG *prng = &prngMem;
@@ -1395,7 +1394,7 @@ void trainDriver() {
   setAccelerating(trainTid);
 
   delta = getTrainLocation(trainTid, &location);
-  int pathDone = false, rearReserve;
+  int pathDone = false;
   //releaseAllReservations(trainTid, -1, -1);
 
   while(!pathDone) {
@@ -1681,17 +1680,18 @@ void trainDriver() {
 	removeTrainTask(trainTid, unreserver);
 
 	//Calculate new path
-	track_edge *badEdge = adjEdge(&track[reserveMsg.node1], &track[reserveMsg.node2]);
-	delta = getTrainLocation(trainTid, &location);
+	track_edge *badEdge = NULL;
+	if(curReserve != 0) {
+	  badEdge = adjEdge(&track[reserveMsg.node1], &track[reserveMsg.node2]);
 
-	assert(curReserve > 0, "curReserve == 0 during recalculation");
-	delta = getTrainLocation(trainTid, &location);
-	if(curNode < curReserve && path.node[curReserve-1] != &track[location]) {
-	  printf("releasing extra reservations ahead of train. curNode is %s\r", (path.node[curNode])->name);
-	  location = getNextNodeForTrackState(track, location);
-	  while(location != getNodeIndex(track, path.node[curReserve])) {
-	    returnReservation(location, getNextNodeForTrackState(track, location));
+	  delta = getTrainLocation(trainTid, &location);
+	  if(curNode < curReserve && path.node[curReserve-1] != &track[location]) {
+	    printf("releasing extra reservations ahead of train. curNode is %s\r", (path.node[curNode])->name);
 	    location = getNextNodeForTrackState(track, location);
+	    while(location != getNodeIndex(track, path.node[curReserve])) {
+	      returnReservation(location, getNextNodeForTrackState(track, location));
+	      location = getNextNodeForTrackState(track, location);
+	    }
 	  }
 	}
 	delta = getTrainLocation(trainTid, &location);
@@ -1818,7 +1818,6 @@ void trainDriver() {
   delta = getTrainLocation(trainTid, &location);
   
   printColored(trainColor, BLACK, "Arrived at %s\r", track[msg.dest].name);
-  printColored(trainColor, BLACK, "actual location is %s + %dcm\r", track[location].name, delta/10000);
   printColored(trainColor, BLACK, "last reservation to be released was between %s and %s, and was to occur at %s + %dcm\r", track[unreserveMsg.node1].name, track[unreserveMsg.node2].name, track[unreserveMsg.location].name, unreserveMsg.delta/10000);
   printReservedTracks(trainTid);
   struct TrainMessage trainMsg;
