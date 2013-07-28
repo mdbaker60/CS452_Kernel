@@ -516,6 +516,16 @@ void TrackServerInit() {
 	  }
 	}
 
+	printf("blocked tracks:\r");
+	for(i=0; i<TRACK_MAX; i++) {
+	  if(track[i].edge[0].numBlocked > 0) {
+	    printf("%s -- %s\r", (track[i].edge[0].src)->name, (track[i].edge[0].dest)->name);
+	  }
+	  if(track[i].edge[1].numBlocked > 0) {
+	    printf("%s -- %s\r", (track[i].edge[1].src)->name, (track[i].edge[1].dest)->name);
+	  }
+	}
+
 	Reply(src, (char *)&reply, sizeof(int));
 	break;
     }

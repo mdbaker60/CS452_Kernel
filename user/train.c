@@ -594,8 +594,7 @@ void trainTask() {
 
 	myNode = first;
 	while(myNode != NULL) {
-	  if((location == myNode->location && delta >= myNode->delta) ||
-	     location == getNextNodeForTrackState(track, myNode->location)) {
+	  if((location == myNode->location && delta >= myNode->delta)) {
 	    Reply(myNode->src, (char *)&reply, sizeof(int));
 	    if(myNode->next == NULL && myNode->last == NULL) {
 	      first = last = NULL;
@@ -1684,8 +1683,18 @@ void trainDriver() {
 	//Calculate new path
 	track_edge *badEdge = adjEdge(&track[reserveMsg.node1], &track[reserveMsg.node2]);
 	delta = getTrainLocation(trainTid, &location);
+
 	assert(curReserve > 0, "curReserve == 0 during recalculation");
-	rearReserve = getNodeIndex(track, (path.node[curReserve-1])->reverse);
+	delta = getTrainLocation(trainTid, &location);
+	if(curNode < curReserve && path.node[curReserve-1] != &track[location]) {
+	  printf("releasing extra reservations ahead of train. curNode is %s\r", (path.node[curNode])->name);
+	  location = getNextNodeForTrackState(track, location);
+	  while(location != getNodeIndex(track, path.node[curReserve])) {
+	    returnReservation(location, getNextNodeForTrackState(track, location));
+	    location = getNextNodeForTrackState(track, location);
+	  }
+	}
+	delta = getTrainLocation(trainTid, &location);
 
 	forwardDistance = shortestPath(location, msg.dest, track, &path, msg.doReverse, badEdge);
  
@@ -1699,21 +1708,12 @@ void trainDriver() {
 	if(reverseDistance < forwardDistance) {
 	  copyPath(&path, &reversePath);
 	  reverseTrain(MyParentTid());
-
-	  delta = getTrainLocation(trainTid, &location);
-	  curUnreserveLocation = distanceBeforeForTrackState(track, 20000+140000+PICKUPLENGTH,
-						location, delta, &reply);
-	  if(curUnreserveLocation != getNodeIndex(track, (path.node[curReserve])->reverse)) {
-	    while(rearReserve != curUnreserveLocation) {
-	      returnReservation(rearReserve, getNextNodeForTrackState(track, rearReserve));
-	      rearReserve = getNextNodeForTrackState(track, rearReserve);
-	    }
-	  }
 	}
 
   	if((path.node[path.numNodes-2])->reverse == path.node[path.numNodes-1]) {
   	  path.numNodes--;
   	}
+	delta = getTrainLocation(trainTid, &location);
 
 	//Create new helper tasks
         noder = Create(2, nodeWatcher);
