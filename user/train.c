@@ -11,6 +11,7 @@
 #include <assert.h>
 
 char *getHomeFromTrainID(int trainID) {
+  assert(trainID >= 0 && trainID <= 5, "get home: train ID out of range");
   switch(trainID) {
     case 0:
       return "EX3";
@@ -30,6 +31,7 @@ char *getHomeFromTrainID(int trainID) {
 }
 
 int getColorFromTrainID(int trainID) {
+  assert(trainID >= 0 && trainID <= 5, "get color: train ID out of range");
   switch(trainID) {
     case 0:
       return CYAN;
@@ -50,6 +52,7 @@ int getColorFromTrainID(int trainID) {
 
 void copyPath(struct Path *dest, struct Path *source) {
   int i=0;
+  assert(source->numNodes > 0, "copyPath: source path has non-posative number of nodes");
   dest->numNodes = source->numNodes;
   for(i=0; i < source->numNodes; i++) {
     (dest->node)[i] = (source->node)[i];
@@ -58,6 +61,8 @@ void copyPath(struct Path *dest, struct Path *source) {
 
 int shortestPath(int node1, int node2, track_node *track, struct Path *path, int doReverse, 
 				track_edge *badEdge) {
+  assert(node1 >= 0 && node1 < TRACK_MAX, "shortestPath: node1 out of range");
+  assert(node2 >= 0 && node2 < TRACK_MAX, "shortestPath, node2 out of range");
   track_node *start = &track[node1];
   track_node *last = &track[node2];
 
@@ -109,6 +114,7 @@ int shortestPath(int node1, int node2, track_node *track, struct Path *path, int
     }
 
     if(minDist == 0x7FFFFFFF) break;
+    assert(minNode->discovered == false, "shortestPath: new minNode already discovered");
     minNode->discovered = true;
     switch(minNode->type) {
       case NODE_BRANCH:
@@ -156,16 +162,6 @@ int shortestPath(int node1, int node2, track_node *track, struct Path *path, int
   }else{
     copyPath(path, &(last->path));
     retVal =  last->searchDistance;
-  }
-
-  int worstNode = 0;
-  int worstDist = 0;
-  for(i=1; i<path->numNodes; i++) {
-    int dist = ((path->node[i])->searchDistance - (path->node[i-1])->searchDistance);
-    if(dist > worstDist) {
-      worstDist = dist;
-      worstNode = i;
-    }
   }
 
   return retVal;
@@ -266,6 +262,7 @@ track_edge *adjEdge(track_node *src, track_node *dest) {
 
 int distanceAfterForTrackState(track_node *track, int distance, int nodeNum, int delta, int *returnDistance) {
   int diff;
+  assert(nodeNum >= 0 && nodeNum < TRACK_MAX, "distanceAfterFTS: nodeNum out of range");
   track_node *node = &track[nodeNum];
   track_node *nextNode;
 
@@ -304,6 +301,7 @@ int distanceAfterForTrackState(track_node *track, int distance, int nodeNum, int
 
 int distanceBeforeForTrackState(track_node *track, int distance, int nodeNum, int delta, int *returnDistance) {
   int diff;
+  assert(nodeNum >= 0 && nodeNum < TRACK_MAX, "distanceBeforeFTS: nodeNum out of range");
   track_node *node = &track[nodeNum];
   track_node *nextNode;
 
@@ -346,6 +344,7 @@ int distanceBeforeForTrackState(track_node *track, int distance, int nodeNum, in
 
 int distanceAfter(struct Path *path, int distance, int nodeNum, int *returnDistance) {
   int diff;
+  assert(nodeNum >= 0 && nodeNum < path->numNodes, "distanceAfter: nodeNum out of range");
 
   if(distance < 0) {
     return distanceBefore(path, -distance, nodeNum, returnDistance);
@@ -373,6 +372,7 @@ int distanceAfter(struct Path *path, int distance, int nodeNum, int *returnDista
 
 int distanceBefore(struct Path *path, int distance, int nodeNum, int *returnDistance) {
   int diff;
+  assert(nodeNum >= 0 && nodeNum < path->numNodes, "distanceBefore: nodeNum out of range");
 
   if(distance < 0) {
     return distanceAfter(path, -distance, nodeNum, returnDistance);
@@ -469,6 +469,8 @@ void locationWaitTask() {
   Receive(&src, (char *)&info, sizeof(struct LocationInfo));
   Reply(src, (char *)&reply, sizeof(int));
 
+  assert(info.location >= 0 && info.location < TRACK_MAX, "locationWaitTask: location out of range");
+  assert(info.delta >= 0, "locationWaitTask: delta < 0");
   waitForLocation(info.trainTid, info.location, info.delta);
 
   Send(src, (char *)&reply, sizeof(int), (char *)&reply, sizeof(int));
@@ -539,6 +541,7 @@ void trainTask() {
 	if(accState != NONE) {
 	  offset = currentPosition(t0, v0, velocity[curSpeed], &accState);
 	  offset -= accDist;
+	  assert(offset >= 0, "negative offset during position calculation");
 	  accDist += offset;
 	}
 	if(track[location].type != NODE_EXIT) {	//can't move past an exit
@@ -568,6 +571,7 @@ void trainTask() {
 	  nextNode = getNodeIndex(track, ((track[location].edge[DIR_AHEAD]).dest));
 	  nextNodeDist = adjDistance(&track[location], &track[nextNode]);
 	}
+	assert(nextNode >= 0 && nextNode < TRACK_MAX, "trainTask: nextNode is out of range");
 	if(delta >= nextNodeDist) {
 	  if(track[nextNode].type == NODE_SENSOR) {
 	    if(numSensorsMissed != 0) {
@@ -594,6 +598,8 @@ void trainTask() {
 
 	myNode = first;
 	while(myNode != NULL) {
+	  assert(myNode->location >= 0 && myNode->location < TRACK_MAX,
+		 "train blocked on location that is out of range");
 	  if((location == myNode->location && delta >= myNode->delta)) {
 	    Reply(myNode->src, (char *)&reply, sizeof(int));
 	    if(myNode->next == NULL && myNode->last == NULL) {
@@ -625,10 +631,13 @@ void trainTask() {
 	}
 	break;
       case TRAINGOTO:
+	assert(msg.speed >= 0 && msg.speed < 15, "trainTask: given out of range speed value");
 	maxSpeed = msg.speed;
 	curSpeed = 0;
 	dest = 0;
 	while(dest < TRACK_MAX && strcmp(track[dest].name, msg.dest) != 0) dest++;
+	assert(dest >= 0 && dest < TRACK_MAX, "trainTask: calculated dest is out of range");
+	assert(strcmp(track[dest].name, msg.dest) == 0, "trainTask: given invalid location name");
 
 	driverMsg.trainNum = trainNum;
 	driverMsg.source = location;
@@ -646,6 +655,8 @@ void trainTask() {
 
 	//reserve the track at your current location
 	curLocation = distanceBeforeForTrackState(track, 20000+140000+PICKUPLENGTH, location, delta, &curDelta);
+	assert(curLocation >= 0 && curLocation < TRACK_MAX,
+	       "trainTask: start of blocking during init out of range");
 	while(curLocation != location) {
 	  blockOnReservation(MyTid(), curLocation, getNextNodeForTrackState(track, curLocation));
 	  curLocation = getNextNodeForTrackState(track, curLocation);
@@ -673,6 +684,8 @@ void trainTask() {
 	break;
       case TRAINSETLOCATION:
 	msg.location = distanceAfterForTrackState(track, msg.delta, msg.location, 0, &msg.delta);
+	assert(msg.location >= 0 && msg.location < TRACK_MAX,
+	       "trainTask: location set to out of range location");
 
 	nextNodeDist = adjDistance(&track[location], &track[msg.location]);
 	if(nextNodeDist != -1) {
@@ -695,6 +708,8 @@ void trainTask() {
 	Reply(src, (char *)&reply, sizeof(int));
 	break;
       case TRAINWAITFORLOCATION:
+	assert(msg.location >= 0 && msg.location < TRACK_MAX,
+	       "trainTask: task tried to wait on invalid location");
 	if((location == msg.location && delta >= msg.delta)) {/* ||
 	   location == getNextNodeForTrackState(track, msg.location)) {*/
 	  Reply(src, (char *)&reply, sizeof(int));
@@ -789,6 +804,8 @@ void trainTask() {
 					curLocation, 0, &delta);
 	/*location = distanceAfterForTrackState(track, 20000+140000+PICKUPLENGTH,
 					curLocation, delta, &delta);*/
+	assert(location >= 0 && location < TRACK_MAX,
+	       "trainTask: location out of range after reverse");
 	if(track[location].type == NODE_BRANCH) {
 	  prevSwitchState = getSwitchState(track[location].num);
 	}
@@ -828,6 +845,7 @@ void trainTask() {
 	Reply(src, (char *)&reply, sizeof(int));	
 	break;
       case TRAINSETSPEED:
+	assert(msg.speed >= 0 && msg.speed < 15, "trainTask: speed set to invalid value");
 	maxSpeed = msg.speed;
 	Reply(src, (char *)&reply, sizeof(int));	
 	break;
@@ -1017,6 +1035,7 @@ int getNodeIndex(track_node *track, track_node *location) {
 }
 
 int getNextStop(struct Path *path, int curNode) {
+  assert(curNode >= 0, "getNextStop: given negative value of curNode");
   curNode++;
   while(curNode < path->numNodes) {
     if(curNode == (path->numNodes)-1) return curNode;
@@ -1029,6 +1048,7 @@ int getNextStop(struct Path *path, int curNode) {
 }
 
 int getNextSwitch(struct Path *path, int curNode) {
+  assert(curNode >= 0, "getNextSwitch: given negative value of curNode");
   curNode++;
   while(curNode < (path->numNodes)-1 || 
         (curNode == (path->numNodes)-1 && ((path->node)[curNode])->type == NODE_MERGE)) {
@@ -1042,6 +1062,7 @@ int getNextSwitch(struct Path *path, int curNode) {
 }
 
 int getNextSensor(struct Path *path, int curNode) {
+  assert(curNode >= 0, "getNextSensor: given negative value of curNode");
   curNode++;
   while(curNode < (path->numNodes)-1) {
     if(((path->node)[curNode])->type == NODE_SENSOR) return curNode;
@@ -1053,10 +1074,12 @@ int getNextSensor(struct Path *path, int curNode) {
 
 void getAllBranchMissSensors(struct Path *path, int curNode, int *sensors, int *switches) {
   int curSensor = 0;
-
+  
+  assert(curNode >= 0, "getAllBranchMissSensors: given a negative value of curNode");
   curNode++;
   while(curNode < (path->numNodes)-1 && ((path->node)[curNode])->type != NODE_SENSOR) {
     if(((path->node)[curNode])->type == NODE_BRANCH) {
+      assert(curSensor < 3, "getAllBranchMissSensors: discovered 4th! sensor");
       switches[curSensor] = ((path->node)[curNode])->num;
       int direction = adjDirection((path->node)[curNode], (path->node)[curNode+1]);
       direction = (direction == DIR_STRAIGHT) ? DIR_CURVED : DIR_STRAIGHT;
@@ -1069,6 +1092,7 @@ void getAllBranchMissSensors(struct Path *path, int curNode, int *sensors, int *
 
 int getNextNodeForTrackState(track_node *track, int location) {
   char dir;
+  assert(location >= 0 && location < TRACK_MAX, "getNextNodeFTS: given out of range location");
   switch(track[location].type) {
     case NODE_EXIT:
       return location;
@@ -1143,6 +1167,8 @@ void switchWatcher() {
     Send(driver, (char *)&message, sizeof(int), (char *)&switchInfo, sizeof(struct SwitchMessage));
     if(switchInfo.done) break;
 
+    assert(switchInfo.location >= 0 && switchInfo.location < TRACK_MAX,
+	   "switchWatcher: given out of range location");
     waitForLocation(trainTid, switchInfo.location, switchInfo.delta);
     if(switchInfo.direction == DIR_STRAIGHT) {
       setSwitchState(switchInfo.switchNum, 'S');
@@ -1166,6 +1192,8 @@ void nodeWatcher() {
     Send(driver, (char *)&message, sizeof(int), (char *)&nodeInfo, sizeof(struct NodeMessage));
     if(nodeInfo.done) break;
 
+    assert(nodeInfo.location >= 0 && nodeInfo.location < TRACK_MAX, 
+	   "nodeWatche: given out of range location");
     if(nodeInfo.reverseNode) {
       waitForStop(trainTid);
       reverseTrain(trainTid);
@@ -1239,11 +1267,17 @@ void unreserveWatcher() {
     //int location;
     //int delta = getTrainLocation(trainTid, &location);
     //printf("waiting for location %d + %d to return reservation ending with %d\rcurrent location is %d + %d\r", unreserveInfo.location, unreserveInfo.delta, unreserveInfo.node2, location, delta);
+    assert(unreserveInfo.location >= 0 && unreserveInfo.location < TRACK_MAX,
+	   "unreserveWatcher: given out of range location");
     if(!inMiddle || !unreserveInfo.inMiddle) {
       waitForLocation(trainTid, unreserveInfo.location, unreserveInfo.delta);
     }
     inMiddle = unreserveInfo.inMiddle;
     //printf("returning reservation between nodes %d and %d\r", unreserveInfo.node1, unreserveInfo.node2);
+    assert(unreserveInfo.node1 >= 0 && unreserveInfo.node1 < TRACK_MAX,
+	   "unreserveWatcher: given out of range value for node1");
+    assert(unreserveInfo.node2 >= 0 && unreserveInfo.node2 < TRACK_MAX,
+	   "unreserveWatcher: given out of range value for node2");
     returnReservation(unreserveInfo.node1, unreserveInfo.node2);
   }
 }
@@ -1265,12 +1299,18 @@ void reserveWatcher() {
     Send(driver, (char *)&message, sizeof(int), (char *)&reserveInfo, sizeof(struct ReserveMessage));
     if(reserveInfo.done) break;
 
+    assert(reserveInfo.location >= 0 && reserveInfo.location < TRACK_MAX,
+	   "reserveWatcher: given out of range location");
     if(location != reserveInfo.location || delta != reserveInfo.delta) {
       waitForLocation(trainTid, reserveInfo.location, reserveInfo.delta);
     }
     location = reserveInfo.location;
     delta = reserveInfo.delta;
     //printf("reserving track between nodes %d and %d\r", reserveInfo.node1, reserveInfo.node2);
+    assert(reserveInfo.node1 >= 0 && reserveInfo.node1 < TRACK_MAX,
+	   "reserveWatcher: given out of range value for node1");
+    assert(reserveInfo.node2 >= 0 && reserveInfo.node2 < TRACK_MAX,
+	   "reserveWatcher: given out of range value for node2");
     int gotReservation = getReservation(trainTid, reserveInfo.node1, reserveInfo.node2);
     if(gotReservation != MyTid()) {
       //printColored(trainColor, BLACK, "waiting for track between nodes %d and %d\r", reserveInfo.node1, reserveInfo.node2);
@@ -1423,6 +1463,8 @@ void trainDriver() {
 	  stopLength += 100000;
 	  stopNode = distanceBefore(&path, stopLength, reserveStopLocation, &stopDistance);
 	}
+	assert(stopNode >= 0 && stopNode < path.numNodes, "CHECKSTOP: out of range stopNode");
+	assert(stopDistance >= 0, "CHECKSTOP: negative stopDistance");
 	delta = getTrainLocation(trainTid, &location);
 	if((location == getNodeIndex(track, path.node[stopNode]) && delta >= stopDistance) ||
 	   location == getNodeIndex(track, path.node[stopNode+1])) {
@@ -1439,6 +1481,7 @@ void trainDriver() {
 	}
 	switchDistance = getTrainMaxVelocity(trainTid)*40;
 	pathNode = distanceBefore(&path, switchDistance, curSwitch, &switchMsg.delta);
+	assert(pathNode >= 0 && pathNode < path.numNodes, "SWITCHDONE: pathNode out of range");
 	switchMsg.location = getNodeIndex(track, path.node[pathNode]);
 	if(switchMsg.delta < 0) {
 	  switchMsg.location = distanceBeforeForTrackState(track, -switchMsg.delta, 
@@ -1464,13 +1507,16 @@ void trainDriver() {
 	printColored(trainColor, BLACK, "waiting for node %s\r", (path.node[curNode])->name);
 	printColored(trainColor, BLACK, "current location is %s + %dcm\r", track[location].name, delta/10000);
 
+	assert(curNode >= 0 && curNode < path.numNodes, "NODEDONE: out of range curNode");
 	nodeMsg.location = getNodeIndex(track, path.node[curNode]);
 	if((path.node[curNode-1])->reverse == path.node[curNode]) {
 	  nodeMsg.reverseNode = true;
 
 	  track_node *curReverseNode = path.node[curNode-1];
-	  track_node *nextReverseNode = &track[getNextNodeForTrackState(track, 
-				getNodeIndex(track, curReverseNode))];
+	  int reverseIndex = getNextNodeForTrackState(track, getNodeIndex(track, curReverseNode));
+	  assert(reverseIndex >= 0 && reverseIndex < TRACK_MAX,
+	 	 "NODEDONE: initail nextReverseNode out of range");
+	  track_node *nextReverseNode = &track[reverseIndex];
 	  int distance = adjDistance(curReverseNode, nextReverseNode);
 	  while(distance <= 20000+140000+PICKUPLENGTH+REVERSEOVERSHOOT) {
 	    if(nextReverseNode->type == NODE_MERGE) {
@@ -1506,6 +1552,8 @@ void trainDriver() {
       case SENSORDONE:
 	if(curSensor != firstSensor) {
 	  delta = getTrainLocation(trainTid, &location);
+	  assert(lastSensor >= 0 && lastSensor < path.numNodes,
+		 "SENSORDONE: lastSensor out of range");
 	  int dist = distanceAlongPath(&path, &track[location], path.node[lastSensor]);
 	  int err = delta - dist;
 	  if(getTrainDirection(trainTid) == DIR_FORWARD) {
@@ -1526,15 +1574,27 @@ void trainDriver() {
 	}
 
 	sensorMsg.sensorNum = getNodeIndex(track, path.node[curSensor]);
+	assert(sensorMsg.sensorNum >= 0 && sensorMsg.sensorNum < 80,
+	       "SENSORDONE: sensorMsg.sensorNum not a valid sensor number");
 	sensorMsg.switchMiss[0] = sensorMsg.switchMiss[1] = sensorMsg.switchMiss[2] = -1;
 	if(lastSensor != -1) {
 	  getAllBranchMissSensors(&path, lastSensor, sensorMsg.switchMiss, brokenSwitchNum);
 	}
+	assert(sensorMsg.switchMiss[0] >= -1 && sensorMsg.switchMiss[0] < 80,
+	       "SENSORDONE: sensorMsg.switchMiss[0] not a valid sensor number");
+	assert(sensorMsg.switchMiss[1] >= -1 && sensorMsg.switchMiss[0] < 80,
+	       "SENSORDONE: sensorMsg.switchMiss[1] not a valid sensor number");
+	assert(sensorMsg.switchMiss[2] >= -1 && sensorMsg.switchMiss[0] < 80,
+	       "SENSORDONE: sensorMsg.switchMiss[2] not a valid sensor number");
 
 	lastSensor = curSensor;
 	curSensor = getNextSensor(&path, curSensor);
 	if(curSensor != -1) {
+	  assert(curSensor >= 0 && curSensor < path.numNodes,
+	         "SENSORDONE: curSensor out of range with value %d", curSensor);
 	  sensorMsg.sensorMiss = getNodeIndex(track, path.node[curSensor]);
+	  assert(sensorMsg.sensorMiss >= 0 && sensorMsg.sensorMiss < 80,
+		 "SENSORDONE: sensorMsg.sensorMiss not a valid sensor number");
 	}else{
 	  sensorMsg.sensorMiss = -1;
 	}
@@ -1625,6 +1685,8 @@ void trainDriver() {
 	setAccelerating(trainTid);
 	break;
       case RESERVEDONE:
+	assert(curReserve >= 0 && curReserve < TRACK_MAX, 
+	       "RESERVEDONE: curReserve out of range at start");
 	if((path.node[curReserve])->type == NODE_EXIT) curReserve++;
 	if(curReserve >= path.numNodes-1) {
 	  break;
@@ -1634,10 +1696,18 @@ void trainDriver() {
 	  pathNode = distanceBefore(&path, 
 				  stoppingDistance(getTrainMaxVelocity(trainTid)),
 				  curReserve-1, &reserveMsg.delta);
+	  assert(pathNode >= 0 && pathNode < path.numNodes,
+		 "RESERVEDONE: pathNode out of range for reverse");
 	  reserveMsg.location = getNodeIndex(track, path.node[pathNode]);
+	  assert(reserveMsg.location >= 0 && reserveMsg.location < TRACK_MAX,
+		 "RESERVEDONE: reserveMsg.location out of range for reverse");
 	  reserveMsg.node1 = curReverseReserve;
+	  assert(reserveMsg.node1 >= 0 && reserveMsg.node1 < TRACK_MAX,
+		 "RESERVEDONE: node1 out of range");
 	  curReverseReserve = getNextNodeForTrackState(track, curReverseReserve);
 	  reserveMsg.node2 = curReverseReserve;
+	  assert(reserveMsg.node2 >= 0 && reserveMsg.node2 < TRACK_MAX,
+		 "RESERVEDONE: node2 out of range");
 	  reverseReserveDist += adjDistance(&track[reserveMsg.node1], &track[reserveMsg.node2]);
 	  printColored(trainColor, BLACK, "waiting for %s + %dcm to make reservation between %s and %s\r", track[reserveMsg.location].name, reserveMsg.delta/10000, track[reserveMsg.node1].name, track[reserveMsg.node2].name);
 	  if(reverseReserveDist >= 20000+140000+PICKUPLENGTH+REVERSEOVERSHOOT) {
@@ -1646,12 +1716,22 @@ void trainDriver() {
 	  reserveMsg.done = false;
 	  Reply(src, (char *)&reserveMsg, sizeof(struct ReserveMessage));
 	}else{
+	  assert(curReserve >= 0 && curReserve < path.numNodes,
+		 "RESERVEDONE: curReserve out of range");
 	  pathNode = distanceBefore(&path, 
 				  stoppingDistance(getTrainMaxVelocity(trainTid)),
 				  curReserve, &reserveMsg.delta);
+	  assert(pathNode >= 0 && pathNode < path.numNodes,
+		 "RESERVEDONE: pathNode out of range");
 	  reserveMsg.location = getNodeIndex(track, path.node[pathNode]);
+	  assert(reserveMsg.location >= 0 && reserveMsg.location < TRACK_MAX,
+		 "RESERVEDONE: reserveMsg.location out of range");
 	  reserveMsg.node1 = getNodeIndex(track, path.node[curReserve]);
+	  assert(reserveMsg.node1 >= 0 && reserveMsg.node1 < TRACK_MAX,
+		 "RESERVEDONE: reserveMsg.node1 out of range");
 	  reserveMsg.node2 = getNodeIndex(track, path.node[curReserve+1]);
+	  assert(reserveMsg.node2 >= 0 && reserveMsg.node2 < TRACK_MAX,
+		 "RESERVEDONE: reserveMsg.node2 out of range");
 	  reserveMsg.done = false;
 	  printColored(trainColor, BLACK, "waiting for %s + %dcm to make reservation between %s and %s\r", track[reserveMsg.location].name, reserveMsg.delta/10000, track[reserveMsg.node1].name, track[reserveMsg.node2].name);
 	  Reply(src, (char *)&reserveMsg, sizeof(struct ReserveMessage));
@@ -1755,9 +1835,15 @@ void trainDriver() {
 	if(curUnreserve == path.numNodes-1) {
 	  break;
 	}
+	assert(curUnreserve >= 0 && curUnreserve < path.numNodes,
+	       "UNRESERVEDONE: curUnreserve out of range");
 	if(curUnreserve == 0 && curUnreserveLocation != -1) {
 	  unreserveMsg.node1 = curUnreserveLocation;
+	  assert(unreserveMsg.node1 >= 0 && unreserveMsg.node1 < TRACK_MAX,
+		 "UNRESERVEDONE: node1 out of range during reverse");
 	  unreserveMsg.node2 = getNextNodeForTrackState(track, curUnreserveLocation);
+	  assert(unreserveMsg.node2 >= 0 && unreserveMsg.node2 < TRACK_MAX,
+		 "UNRESERVEDONE: node2 out of range during reverse");
 	  unreserveMsg.done = false;
 	  curUnreserveLocation = unreserveMsg.node2;
 	  if(&track[curUnreserveLocation] == path.node[0]) {
@@ -1771,19 +1857,31 @@ void trainDriver() {
 	    int dist = 0;
 	    while(dist <= 20000+140000+PICKUPLENGTH+REVERSEOVERSHOOT) {
 	      int next = getNextNodeForTrackState(track, curReverseNode);
+	      assert(curReverseNode >= 0 && curReverseNode < TRACK_MAX,
+		     "UNRESERVEDONE: curReverseNode out of range");
+	      assert(next >= 0 && next < TRACK_MAX,
+		     "UNRESERVEDOEN: next out of range");
 	      returnReservation(curReverseNode, next);
-	      dist += adjDistance(&track[curReverseNode], &track[next]);
+	      int adjDist = adjDistance(&track[curReverseNode], &track[next]);
+	      assert(adjDist > 0, "UNRESERVEDONE: distance between reverse nodes non-posative");
+	      dist += adjDist;
 	      curReverseNode = next;
 	    }
 	  }
 	  unreserveMsg.node1 = getNodeIndex(track, path.node[curUnreserve]);
+	  assert(unreserveMsg.node1 >= 0 && unreserveMsg.node1 < TRACK_MAX,
+		 "UNRESERVEDONE: node1 out of range");
 	  unreserveMsg.node2 = getNodeIndex(track, path.node[curUnreserve+1]);
+	  assert(unreserveMsg.node2 >= 0 && unreserveMsg.node2 < TRACK_MAX,
+		 "UNRESERVEDONE: node2 out of range");
 	  printColored(trainColor, BLACK, "waiting for %s + %dcm to release reservation between nodes %s an %s\r", track[unreserveMsg.location].name, unreserveMsg.delta/10000, track[unreserveMsg.node1].name, track[unreserveMsg.node2].name);
 	  unreserveMsg.done = false;
 	  curUnreserve++;
 	}
 	unreserveMsg.location = distanceAfterForTrackState(track, 20000+140000+PICKUPLENGTH, 
 						unreserveMsg.node2, 0, &unreserveMsg.delta);
+	assert(unreserveMsg.location >= 0 && unreserveMsg.location < TRACK_MAX, 
+	       "UNRESERVEDONE: unreserveMsg.location out of range");
 	if(track[unreserveMsg.node2].num >= 153) {
 	  unreserveMsg.inMiddle = true;
 	}else{

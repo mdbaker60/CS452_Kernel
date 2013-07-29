@@ -3,9 +3,11 @@
 
 #include <bwio.h>
 
-#define assert(CHECK, MSG) do {\
+#define assert(CHECK, ...) do {\
 if(!(CHECK)) {\
-bwprintf(COM2, "\e[1;1f\e[2JAssertion Failure: %s\r", MSG);\
+bwprintf(COM2, "\e[1;1f\e[2JAssertion Failure:");\
+bwprintf(COM2,__VA_ARGS__);\
+bwprintf(COM2, "\r");\
 Shutdown();\
 }\
 }while(0)
