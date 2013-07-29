@@ -7,6 +7,7 @@
 #include <track.h>
 #include <string.h>
 #include <train.h>
+#include <assert.h>
 
 struct TrackMessage {
   int type;
@@ -222,9 +223,9 @@ void TrackServerInit() {
     Receive(&src, (char *)&msg, sizeof(struct TrackMessageBuf));
     switch(msg.type) {
       case TRACKSETSWITCH:
-	if(msg.data[0] < 0 || msg.data[0] > 156 || (msg.data[0] > 18 && msg.data[0] < 153)) {
-	  printColored(RED, BLACK, "ERROR: train server given invalid switch number %d\r", msg.data[0]);
-	}else if(msg.data[0] <= 18 && switchStates[msg.data[0]-1] != (char)msg.data[1]) {
+	assert((msg.data[0] >= 0 && msg.data[0] <= 18) || (msg.data[0] >= 153 && msg.data[0] <= 156),
+	       "train server given invalid switch number");
+	if(msg.data[0] <= 18 && switchStates[msg.data[0]-1] != (char)msg.data[1]) {
 	  switchStates[msg.data[0]-1] = (char)msg.data[1];
 	  printAt(4, (msg.data[0]*3)-1, "%c", (char)msg.data[1]);
 	  changeSwitch(msg.data[0], (char)msg.data[1]);
@@ -238,6 +239,8 @@ void TrackServerInit() {
 	Reply(src, (char *)&reply, sizeof(int));
 	break;
       case TRACKGETSWITCH:
+	assert((msg.data[0] >= 0 && msg.data[0] <= 18) || (msg.data[0] >= 153 && msg.data[0] <= 156),
+	       "train server given invalid switch number for GETSWITCH");
 	if(msg.data[0] <= 18) {
 	  reply = switchStates[msg.data[0]-1];
 	}else{
@@ -251,15 +254,17 @@ void TrackServerInit() {
 	(tempNode->sensors).stateInfo[0] = msg.data[0];
 	(tempNode->sensors).stateInfo[1] = msg.data[1];
 	(tempNode->sensors).stateInfo[2] = msg.data[2];
+	assert(msg.data[0] != 0 || msg.data[1] != 0 || msg.data[2] != 0,
+	       "task waiting on no sensors");
 
 	tempNode->next = NULL;
 	if(first == NULL) {
-		tempNode->last = NULL;
-		first = last = tempNode;
+	  tempNode->last = NULL;
+	  first = last = tempNode;
 	}else{
-		tempNode->last = last;
-		last->next = tempNode;
-		last = tempNode;
+	  tempNode->last = last;
+	  last->next = tempNode;
+	  last = tempNode;
 	}
 	break;
       case TRACKSETSENSORS:
@@ -295,6 +300,8 @@ void TrackServerInit() {
 	break;
       case TRACKSETTRACK:
 	activeTrack = msg.data[0];
+	assert(msg.data[0] == TRACKA || msg.data[0] == TRACKB, 
+	       "track server given track that is not track A or track B");
 	if(activeTrack == TRACKA) {
 	  init_tracka(track);
 	}else{
@@ -378,10 +385,13 @@ void TrackServerInit() {
 	  break;
 	}
       case TRACKRESERVE:
+	assert(msg.data[0] >= 0 && msg.data[0] < TRACK_MAX,
+	       "TRACKRESERVE: msg.data[0] out of range");
+	assert(msg.data[1] >= 0 && msg.data[1] < TRACK_MAX,
+	       "TRACKRESERVE: msg.data[1] out of range");
 	edge = adjEdge(&track[msg.data[0]], &track[msg.data[1]]);
 	reverseEdge = adjEdge(track[msg.data[1]].reverse, track[msg.data[0]].reverse);
 	getMergeEdges(&track[msg.data[0]], &track[msg.data[1]], &mergeEdge1, &mergeEdge2);
-	
 	if(edge == NULL) {
 	  Reply(src, (char *)&src, sizeof(int));
 	  break;
@@ -406,6 +416,10 @@ void TrackServerInit() {
 	Reply(src, (char *)&reply, sizeof(int));
 	break;
       case TRACKRESERVEBLOCK:
+	assert(msg.data[0] >= 0 && msg.data[0] < TRACK_MAX,
+	       "TRACKRESERVE: msg.data[0] out of range");
+	assert(msg.data[1] >= 0 && msg.data[1] < TRACK_MAX,
+	       "TRACKRESERVE: msg.data[1] out of range");
 	edge = adjEdge(&track[msg.data[0]], &track[msg.data[1]]);
 	reverseEdge = adjEdge(track[msg.data[1]].reverse, track[msg.data[0]].reverse);
 	getMergeEdges(&track[msg.data[0]], &track[msg.data[1]], &mergeEdge1, &mergeEdge2);
@@ -444,6 +458,10 @@ void TrackServerInit() {
 	}
 	break;
       case TRACKUNRESERVE:
+	assert(msg.data[0] >= 0 && msg.data[0] < TRACK_MAX,
+	       "TRACKRESERVE: msg.data[0] out of range");
+	assert(msg.data[1] >= 0 && msg.data[1] < TRACK_MAX,
+	       "TRACKRESERVE: msg.data[1] out of range");
 	edge = adjEdge(&track[msg.data[0]], &track[msg.data[1]]);
 	reverseEdge = adjEdge(track[msg.data[1]].reverse, track[msg.data[0]].reverse);
 	getMergeEdges(&track[msg.data[0]], &track[msg.data[1]], &mergeEdge1, &mergeEdge2);
@@ -467,6 +485,8 @@ void TrackServerInit() {
 	while(tempReserveNode != NULL) {
 	  edge = tempReserveNode->edge;
 	  reverseEdge = tempReserveNode->reverseEdge;
+	  assert(edge != NULL && reverseEdge != NULL,
+		 "encountered task waiting on reservation on NULL edge");
 	  mergeEdge1 = tempReserveNode->mergeEdge1;
 	  mergeEdge2 = tempReserveNode->mergeEdge2;
 
