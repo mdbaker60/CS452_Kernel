@@ -421,7 +421,7 @@ void delayTask() {
   Destroy(MyTid());
 }
 
-void sensorWaitTask() {
+/*void sensorWaitTask() {
   int sensorNum, reply = 0, src;
   Receive(&src, (char *)&sensorNum, sizeof(int));
   Reply(src, (char *)&reply, sizeof(int));
@@ -430,7 +430,7 @@ void sensorWaitTask() {
 
   Send(src, (char *)&sensorNum, sizeof(int), (char *)&reply, sizeof(int));
   Destroy(MyTid());
-}
+}*/
 
 void reserveWaitTask() {
   int trainTid, reply = 0, src;
@@ -649,7 +649,7 @@ void trainTask() {
 	break;
       case TRAININIT:
 	Putc2(1, (char)2, (char)trainNum);
-	location = waitOnAnySensor();
+	location = waitOnAnySensor(NORESERVATIONS);
 	location = distanceAfterForTrackState(track, 70000, location, 0, &delta);
 	Putc2(1, (char)0, (char)trainNum);
 
@@ -1234,7 +1234,7 @@ void sensorWatcher() {
       }
     }
 
-    int sensorHit = waitOnSensors(&sensors);
+    int sensorHit = waitOnSensors(trainTid, &sensors);
     if(sensorHit == sensorInfo.sensorNum) {
       message = SENSORDONE;
     }else if(sensorHit == sensorInfo.sensorMiss) {
@@ -1317,7 +1317,7 @@ void reserveWatcher() {
       message = RESERVENEEDSTOP;
       Send(driver, (char *)&message, sizeof(int), (char *)&reply, sizeof(int));
 
-      int waitTime = randomRange(prng, 500, 1000);	//between 5 and 10 seconds
+      int waitTime = randomRange(prng, 300, 900);	//between 5 and 10 seconds
       int waitTask = Create(2, delayTask);
       Send(waitTask, (char *)&waitTime, sizeof(int), (char *)&reply, sizeof(int));
 
@@ -1338,6 +1338,7 @@ void reserveWatcher() {
 	Destroy(waitTask);
 	removeTrackTask(reserveTask);
       }
+      Delay(200);
 
       //blockOnReservation(trainTid, reserveInfo.node1, reserveInfo.node2);
       //setAccelerating(trainTid);
@@ -1835,7 +1836,7 @@ void trainDriver() {
 	if(curUnreserve == path.numNodes-1) {
 	  break;
 	}
-	assert(curUnreserve >= 0 && curUnreserve < path.numNodes,
+	assert(curUnreserve >= 0 && curUnreserve < path.numNodes-1,
 	       "UNRESERVEDONE: curUnreserve out of range");
 	if(curUnreserve == 0 && curUnreserveLocation != -1) {
 	  unreserveMsg.node1 = curUnreserveLocation;
@@ -1848,9 +1849,9 @@ void trainDriver() {
 	  curUnreserveLocation = unreserveMsg.node2;
 	  if(&track[curUnreserveLocation] == path.node[0]) {
 	    curUnreserveLocation = -1;
+	    assert(curUnreserve == 0, "curUnreserve not equal to 0 at barrier");
 	    printColored(RED, BLACK, "initial reservations released\r");
 	  }
-	  printColored(trainColor, BLACK, "waiting for %s + %dcm to release reservation between nodes %s and %s\r", track[unreserveMsg.location].name, unreserveMsg.delta/10000, track[unreserveMsg.node1].name, track[unreserveMsg.node2].name);
 	}else{
 	  if(curUnreserve != 0 && (path.node[curUnreserve-1])->reverse == path.node[curUnreserve]) {
 	    int curReverseNode = getNodeIndex(track, path.node[curUnreserve-1]);
@@ -1874,7 +1875,6 @@ void trainDriver() {
 	  unreserveMsg.node2 = getNodeIndex(track, path.node[curUnreserve+1]);
 	  assert(unreserveMsg.node2 >= 0 && unreserveMsg.node2 < TRACK_MAX,
 		 "UNRESERVEDONE: node2 out of range");
-	  printColored(trainColor, BLACK, "waiting for %s + %dcm to release reservation between nodes %s an %s\r", track[unreserveMsg.location].name, unreserveMsg.delta/10000, track[unreserveMsg.node1].name, track[unreserveMsg.node2].name);
 	  unreserveMsg.done = false;
 	  curUnreserve++;
 	}
@@ -1961,11 +1961,11 @@ void trainConfiger() {
   for(i=8; i<15; i++) {
     setTrainSpeed(MyParentTid(), i);
     Putc2(1, (char)i, (char)msg.trainNum);
-    oldSensor = waitOnAnySensor();
+    oldSensor = waitOnAnySensor(NORESERVATIONS);
     oldTime = Time();
     sensorsPassed = 0;
     while(true) {
-      sensor = waitOnAnySensor();
+      sensor = waitOnAnySensor(NORESERVATIONS);
       setTrainLocation(MyParentTid(), sensor, 0);
       time = Time();
       int distance = 1000*BFS(oldSensor, sensor, track, NULL, false);

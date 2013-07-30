@@ -12,6 +12,7 @@
 #define NUMSENSORS	80
 #define NUMSWITCHES 	22
 #define ANYSENSOR	80
+#define NORESERVATIONS	123
 
 #define TRACKPRINTCLOCK		0
 #define TRACKSETSWITCH		1
@@ -42,9 +43,9 @@ void TrackServerInit();
 void printTime(int min, int sec, int tenthSec);
 void setSwitchState(int switchNum, char state);
 char getSwitchState(int switchNum);
-void waitOnSensor(int sensorNum);
-int waitOnSensors(struct SensorStates *sensors);
-int waitOnAnySensor();
+void waitOnSensor(int trainTid, int sensorNum);
+int waitOnSensors(int trainTid, struct SensorStates *sensors);
+int waitOnAnySensor(int trainTid);
 void setSensorData(struct SensorStates *states);
 void printDebugInfo(int line, char *debugInfo);
 void refreshScreen();

@@ -11,19 +11,20 @@
 
 struct TrackMessage {
   int type;
-  int data[3];
+  int data[4];
   int tid;
 };
 
 struct TrackMessageBuf {
   int type;
-  int data[3];
+  int data[4];
   int tid;
   char buffer[128];
 };
 
 struct TrackNode {
   int tid;
+  int trainTid;
   struct SensorStates sensors;
   struct TrackNode *next;
   struct TrackNode *last;
@@ -111,8 +112,9 @@ void printSensorList(int *history, int head) {
   finishedDrawing();
 }
 
-void updateSensorInfo(struct SensorStates *oldStates, struct SensorStates *newStates, 
-			int *history, int *head, struct TrackNode **first, struct TrackNode **last) {
+void updateSensorInfo(track_node *track, struct SensorStates *oldStates,
+			struct SensorStates *newStates, int *history,int *head,
+			struct TrackNode **first, struct TrackNode **last) {
   int i;
   for(i=0; i<NUMSENSORS; i++) {
     int old = getSensor(oldStates, i);
@@ -122,8 +124,10 @@ void updateSensorInfo(struct SensorStates *oldStates, struct SensorStates *newSt
       *head %= 10;
 
       struct TrackNode *cur = *first;
+      track_edge *edge = &((track[i].reverse)->edge)[DIR_AHEAD];
       while(cur != NULL) {
-	if(getSensor(&(cur->sensors), i)) {
+	if(getSensor(&(cur->sensors), i) && 
+	   (cur->trainTid == edge->reservedTrain || cur->trainTid == NORESERVATIONS)) {
 	  int replyVal = Reply(cur->tid, (char *)&i, sizeof(int));
 	  if(cur->last == NULL && cur->next == NULL) {
 	    *first = *last = NULL;
@@ -254,6 +258,7 @@ void TrackServerInit() {
 	(tempNode->sensors).stateInfo[0] = msg.data[0];
 	(tempNode->sensors).stateInfo[1] = msg.data[1];
 	(tempNode->sensors).stateInfo[2] = msg.data[2];
+	tempNode->trainTid = msg.data[3];
 	assert(msg.data[0] != 0 || msg.data[1] != 0 || msg.data[2] != 0,
 	       "task waiting on no sensors");
 
@@ -271,7 +276,7 @@ void TrackServerInit() {
 	newStates.stateInfo[0] = msg.data[0];
 	newStates.stateInfo[1] = msg.data[1];
 	newStates.stateInfo[2] = msg.data[2];
-	updateSensorInfo(&sensorStates, &newStates, sensorHistory, &historyHead, &first, &last);
+	updateSensorInfo(track,&sensorStates, &newStates, sensorHistory, &historyHead, &first, &last);
 	reply = 0;
 	Reply(src, (char *)&reply, sizeof(int));
 	break;
@@ -589,7 +594,7 @@ char getSwitchState(int switchNum) {
   return (char)reply;
 }
 
-void waitOnSensor(int sensorNum) {
+void waitOnSensor(int trainTid, int sensorNum) {
   struct TrackMessage msg;
   msg.type = TRACKBLOCKSENSOR;
   struct SensorStates states;
@@ -597,17 +602,19 @@ void waitOnSensor(int sensorNum) {
   msg.data[0] = states.stateInfo[0];
   msg.data[1] = states.stateInfo[1];
   msg.data[2] = states.stateInfo[2];
+  msg.data[3] = trainTid;
   int reply;
 
   Send(whoIs("Track Server"), (char *)&msg, sizeof(struct TrackMessage), (char *)&reply, sizeof(int));
 }
 
-int waitOnSensors(struct SensorStates *sensors) {
+int waitOnSensors(int trainTid, struct SensorStates *sensors) {
   struct TrackMessage msg;
   msg.type = TRACKBLOCKSENSOR;
   msg.data[0] = (sensors->stateInfo)[0];
   msg.data[1] = (sensors->stateInfo)[1];
   msg.data[2] = (sensors->stateInfo)[2];
+  msg.data[3] = trainTid;
   int reply;
 
   Send(whoIs("Track Server"), (char *)&msg, sizeof(struct TrackMessage), (char *)&reply, sizeof(int));
@@ -615,12 +622,13 @@ int waitOnSensors(struct SensorStates *sensors) {
   return reply;
 }
 
-int waitOnAnySensor() {
+int waitOnAnySensor(int trainTid) {
   struct TrackMessage msg;
   msg.type = TRACKBLOCKSENSOR;
   msg.data[0] = 0xFFFFFFFF;
   msg.data[1] = 0xFFFFFFFF;
   msg.data[2] = 0xFFFFFFFF;
+  msg.data[3] = trainTid;
   int reply;
 
   Send(whoIs("Track Server"), (char *)&msg, sizeof(struct TrackMessage), (char *)&reply, sizeof(int));
