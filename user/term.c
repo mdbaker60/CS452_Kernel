@@ -383,13 +383,13 @@ void parseCommand(char *command, int *trainSpeeds, int *train, struct PRNG *prng
   }else if(strcmp(argv[0], "d") == 0) {
     track_node track[TRACK_MAX];
     initTrack(track);
-    int trainNum = 45;
-    int trainSpeed = strToInt(getArgument(argc, argv, 0));
+    int trainNum = strToInt(getArgument(argc, argv, 0));;
+    int trainSpeed = strToInt(getArgument(argc, argv, 1));
     Putc2(1, (char)trainSpeed, (char)trainNum);
-    int sensor, lastSensor = waitOnAnySensor(), lastTime = Time(), time;
+    int sensor, lastSensor = waitOnAnySensor(NORESERVATIONS), lastTime = Time(), time;
     int v = 0;
     while(true) {
-      sensor = waitOnAnySensor();
+      sensor = waitOnAnySensor(NORESERVATIONS);
       time = Time();
       if(sensor == 71) break;
 
@@ -420,7 +420,7 @@ void parseCommand(char *command, int *trainSpeeds, int *train, struct PRNG *prng
     Putc2(1, (char)trainSpeed, (char)trainNum);
     int t0 = Time();
     printf("Time 0: %d\r", t0);
-    waitOnSensor(dest);
+    waitOnSensor(NORESERVATIONS, dest);
     int t2 = Time();
     Putc2(1, (char)0, (char)trainNum);
     printf("Time 2: %d\r", t2);
