@@ -23,6 +23,14 @@ void initVelocities(int trainNum, int *velocity) {
     velocity[12] = 5520;
     velocity[13] = 6000;
     velocity[14] = 6010;
+  }else if(trainNum == 49 || trainNum == 50) {
+    velocity[8] = 3820;
+    velocity[9] = 4420;
+    velocity[10] = 4990;
+    velocity[11] = 5560;
+    velocity[12] = 6140;
+    velocity[13] = 6490;
+    velocity[14] = 6530;
   }
 }
 
