@@ -127,7 +127,8 @@ void updateSensorInfo(track_node *track, struct SensorStates *oldStates,
       track_edge *edge = &((track[i].reverse)->edge)[DIR_AHEAD];
       while(cur != NULL) {
 	if(getSensor(&(cur->sensors), i) && 
-	   (cur->trainTid == edge->reservedTrain || cur->trainTid == NORESERVATIONS)) {
+	   (cur->trainTid == edge->reservedTrain || cur->trainTid == NORESERVATIONS ||
+	    edge->reservedTrain == -1)) {
 	  int replyVal = Reply(cur->tid, (char *)&i, sizeof(int));
 	  if(cur->last == NULL && cur->next == NULL) {
 	    *first = *last = NULL;

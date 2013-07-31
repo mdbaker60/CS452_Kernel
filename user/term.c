@@ -385,9 +385,11 @@ void parseCommand(char *command, int *trainSpeeds, int *train, struct PRNG *prng
     initTrack(track);
     int trainNum = strToInt(getArgument(argc, argv, 0));;
     int trainSpeed = strToInt(getArgument(argc, argv, 1));
+    int velocity[15];
+    initVelocities(45, velocity);
     Putc2(1, (char)trainSpeed, (char)trainNum);
     int sensor, lastSensor = waitOnAnySensor(NORESERVATIONS), lastTime = Time(), time;
-    int v = 0;
+    int v = velocity[trainSpeed];
     while(true) {
       sensor = waitOnAnySensor(NORESERVATIONS);
       time = Time();
@@ -395,7 +397,7 @@ void parseCommand(char *command, int *trainSpeeds, int *train, struct PRNG *prng
 
       int timeDelta = (time - lastTime);
       int distance = BFS(lastSensor, sensor, track, NULL, false);
-      int newVelocity = (500*distance)/timeDelta;
+      int newVelocity = (5000*distance)/timeDelta;
       v *= 95;
       v += newVelocity;
       v /= 100;

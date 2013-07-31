@@ -539,7 +539,7 @@ void trainTask() {
 	if(location == -1) break;
 	float offset = velocity[curSpeed]*2;
 	if(accState != NONE) {
-	  offset = currentPosition(t0, v0, velocity[curSpeed], &accState);
+	  offset = currentPosition(t0, v0, velocity[curSpeed], &accState, trainNum);
 	  offset -= accDist;
 	  assert(offset >= 0, "negative offset during position calculation");
 	  accDist += offset;
@@ -548,7 +548,7 @@ void trainTask() {
 	  delta += offset;
 	}
 
-	if(currentVelocity(t0, v0, velocity[curSpeed], &accState) == 0) {
+	if(currentVelocity(t0, v0, velocity[curSpeed], &accState, trainNum) == 0) {
 	  for(i=0; i<stopHead; i++) {
 	    Reply(stopBuffer[i], (char *)&reply, sizeof(int));
 	  }
@@ -623,7 +623,7 @@ void trainTask() {
 	if(numUpdates == 10) {
 	  printColoredAt(myColor, BLACK, 8+trainID, 1,
 			 "\e[K%d -- Velocity: %dmm/s",
-			 trainNum, currentVelocity(t0, v0, velocity[curSpeed], &accState)/10);
+			 trainNum, currentVelocity(t0, v0, velocity[curSpeed], &accState, trainNum)/10);
 	  printColoredAt(myColor, BLACK, 8+trainID, 40,
 			 "%s + %dcm",
 			 track[location].name, delta/10000);
@@ -641,6 +641,7 @@ void trainTask() {
 
 	driverMsg.trainNum = trainNum;
 	driverMsg.source = location;
+	driverMsg.delta = delta;
 	driverMsg.dest = dest;
 	driverMsg.doReverse = msg.doReverse;
 	driver = Create(3, trainDriver);
@@ -675,6 +676,7 @@ void trainTask() {
 
 	driverMsg.trainNum = trainNum;
 	driverMsg.source = location;
+	driverMsg.delta = delta;
 	driverMsg.dest = 2;
 	driverMsg.doReverse = false;
 	driver = Create(3, trainDriver);
@@ -730,7 +732,7 @@ void trainTask() {
 	}
 	break;
       case TRAINWAITFORSTOP:
-	if(currentVelocity(t0, v0, velocity[curSpeed], &accState) > 0) {
+	if(currentVelocity(t0, v0, velocity[curSpeed], &accState, trainNum) > 0) {
 	  stopBuffer[stopHead++] = src;
 	  stopHead %= 100;
 	}else{	
@@ -747,7 +749,7 @@ void trainTask() {
 	Reply(src, (char *)&reply, sizeof(int));
 	break;
       case TRAINSETDEC:
-	v0 = currentVelocity(t0, v0, velocity[curSpeed], &accState);
+	v0 = currentVelocity(t0, v0, velocity[curSpeed], &accState, trainNum);
 	accState = DECELERATING;
 	t0 = Time();
 	accDist = 0;
@@ -761,7 +763,7 @@ void trainTask() {
 	Reply(src, (char *)&msg, sizeof(struct TrainMessage));
 	break;
       case TRAINGETVELOCITY:
-	curVelocity = currentVelocity(t0, v0, velocity[curSpeed], &accState);
+	curVelocity = currentVelocity(t0, v0, velocity[curSpeed], &accState, trainNum);
 	Reply(src, (char *)&curVelocity, sizeof(int));
 	break;
       case TRAINGETMAXVELOCITY:
@@ -1373,12 +1375,14 @@ void trainDriver() {
   struct Path path;
   struct Path reversePath;
   int forwardDistance = shortestPath(msg.source, msg.dest, track, &path, msg.doReverse, NULL);
+  forwardDistance -= msg.delta;
  
   int reverseStart = getNodeIndex(track, track[msg.source].reverse);
   int reverseSource, reverseDelta;
   reverseSource = distanceAfterForTrackState(track, 140000+20000+PICKUPLENGTH, 
 					reverseStart, 0, &reverseDelta);
   int reverseDistance = shortestPath(reverseSource, msg.dest, track, &reversePath, msg.doReverse, NULL);
+  reverseDistance += msg.delta;
   if(reverseDistance < forwardDistance) {
     copyPath(&path, &reversePath);
     reverseTrain(MyParentTid());
@@ -1434,6 +1438,8 @@ void trainDriver() {
   char switchState;
   setAccelerating(trainTid);
 
+  int trainNum = getTrainNum(trainTid);
+
   delta = getTrainLocation(trainTid, &location);
   int pathDone = false;
   //releaseAllReservations(trainTid, -1, -1);
@@ -1451,7 +1457,7 @@ void trainDriver() {
 	  break;
 	}
 	Reply(src, (char *)&reply, sizeof(int));
-	stopLength = stoppingDistance(getTrainVelocity(trainTid));
+	stopLength = stoppingDistance(trainNum, getTrainVelocity(trainTid));
 	if(reserveStopLocation == -1) {
 	  if(curStop != path.numNodes-1) {
 	    stopLength -= (REVERSEOVERSHOOT+20000+140000+PICKUPLENGTH);
@@ -1636,13 +1642,15 @@ void trainDriver() {
 
 	//Calculate new path
 	forwardDistance = shortestPath(location, msg.dest, track, &path, msg.doReverse, NULL);
+	forwardDistance -= msg.delta;
  
 	int reverseStart = getNodeIndex(track, track[location].reverse);
 	int reverseSource, reverseDelta;
 	reverseSource = distanceAfterForTrackState(track, 140000+20000+PICKUPLENGTH, 
 					reverseStart, 0, &reverseDelta);
-	int reverseDistance = shortestPath(reverseSource, msg.dest, track, 
+	reverseDistance = shortestPath(reverseSource, msg.dest, track, 
 					&reversePath, msg.doReverse, NULL);
+	reverseDistance += msg.delta;
 	if(reverseDistance < forwardDistance) {
 	  copyPath(&path, &reversePath);
 	  reverseTrain(MyParentTid());
@@ -1695,7 +1703,7 @@ void trainDriver() {
 
 	if(curReverseReserve != -1) {
 	  pathNode = distanceBefore(&path, 
-				  stoppingDistance(getTrainMaxVelocity(trainTid)),
+				  stoppingDistance(trainNum, getTrainMaxVelocity(trainTid)),
 				  curReserve-1, &reserveMsg.delta);
 	  assert(pathNode >= 0 && pathNode < path.numNodes,
 		 "RESERVEDONE: pathNode out of range for reverse");
@@ -1720,7 +1728,7 @@ void trainDriver() {
 	  assert(curReserve >= 0 && curReserve < path.numNodes,
 		 "RESERVEDONE: curReserve out of range");
 	  pathNode = distanceBefore(&path, 
-				  stoppingDistance(getTrainMaxVelocity(trainTid)),
+				  stoppingDistance(trainNum, getTrainMaxVelocity(trainTid)),
 				  curReserve, &reserveMsg.delta);
 	  assert(pathNode >= 0 && pathNode < path.numNodes,
 		 "RESERVEDONE: pathNode out of range");
@@ -1778,6 +1786,7 @@ void trainDriver() {
 	delta = getTrainLocation(trainTid, &location);
 
 	forwardDistance = shortestPath(location, msg.dest, track, &path, msg.doReverse, badEdge);
+	forwardDistance -= msg.delta;
  
 	reverseStart = getNextNodeForTrackState(track, location);
 	reverseStart = getNodeIndex(track, track[reverseStart].reverse);
@@ -1786,6 +1795,7 @@ void trainDriver() {
 					reverseStart, reverseDelta, &reverseDelta);
 	reverseDistance = shortestPath(reverseSource, msg.dest, track, 
 					&reversePath, msg.doReverse, badEdge);
+	reverseDistance += msg.delta;
 	if(reverseDistance < forwardDistance) {
 	  copyPath(&path, &reversePath);
 	  reverseTrain(MyParentTid());
@@ -1970,7 +1980,7 @@ void trainConfiger() {
       time = Time();
       int distance = 1000*BFS(oldSensor, sensor, track, NULL, false);
       int newVelocity = distance/(time - oldTime);
-      if(msg.velocity[i] - newVelocity < msg.velocity[i]/200 && sensorsPassed >= 10) break;
+      if(msg.velocity[i] - newVelocity < msg.velocity[i]/400 && sensorsPassed >= 10) break;
       msg.velocity[i] *= 95;
       msg.velocity[i] += 5*newVelocity;
       msg.velocity[i] /= 100;

@@ -91,6 +91,7 @@ struct UnreserveMessage {
 struct TrainDriverMessage {
   int trainNum;
   int source;
+  int delta;
   int dest;
   int doReverse;
   int velocity[15];
